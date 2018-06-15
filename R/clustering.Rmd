@@ -1,0 +1,407 @@
+---
+title: "Clustering"
+output: html_notebook
+---
+
+``` {r clustering}
+#### 거리함수 dist ####
+rm(list=ls())
+## 수치형 데이터 거리
+x <- matrix(rnorm(100, mean=0, sd=1), nrow=5, ncol=20) # 표준?정규분포 데이터에서 숫자 100개를 뽑아오기
+View(x) # 총 5명의 사람..
+dist(x, method='euclidean') #  method='euclidean'은 default. 안써도 동일.
+
+# 다른 method
+x1 <- c(10, 20, 1, 2, 3, 4)
+y1 <- c(5, 6, 7, 8, 9, 10) 
+# 지금은 두 사람. 즉, 거리값은 하나만 나올 것
+
+# euclidean
+sqrt(sum((x1-y1)^2)) # 19.10  - 점이 두개보다 많아도 동일하게 각 거리의 제곱을 모두 더한 합의 제곱근(square root)인듯..
+dist(rbind(x1, y1), method='euclidean') # 19.10
+
+# manhattan
+sum(abs(x1 - y1)) # 43  - 각 거리(절대값)의 합
+dist(rbind(x1, y1), method='manhattan') # 43
+
+
+## 범주형 데이터 거리 
+# 이분형(binary)
+x2 <- c(0,1,1,1,1,1,0)
+y2 <- c(0,0,1,1,0,1,1)
+
+sqrt(sum((x2 - y2)^2)) # 1.41
+dist(rbind(x2,y2), method='binary') # 0.5 ..다름...거리는 다른 범주를 의미한다고 볼 수 있음
+# 계산법
+# 0,0 쌍은 제거
+# 나머지 쌍 개수 분(분모)의 : 지금 6
+# 서로 다른 쌍 개수(분자) : 지금 3
+
+
+## 데이터에 수치형, 범주형 둘 다 있을 때 거리 
+library(cluster)
+A <- c(20, '여자',170,'대학생')
+B <- c(25, '남자',178,'군인')
+C <- c(37, '남자',173,'직장인')
+D <- c(21, '여자',162,'대학생')
+
+people <- as.data.frame(rbind(A,B,C,D))
+colnames(people) <- c('age','sex','height','career')
+str(people)
+people$age <- as.numeric(as.character(people$age))
+people$height <- as.numeric(as.character(people$height))
+
+# daisy: 수치형, 범주형이 데이터에 모두 들어있을 때 거리 구할 때
+daisy_dist <- daisy(people, metric='gower', stand=F) 
+# gower 가 그 방법 중 하나. stand=F는 데이터가 표준화되어있는지 아닌지...help문에 따르면 gower쓰는 경우는 의미없다고함
+daisy_dist # A-D 가장 가깝고, C-D 가장 멂... 우와
+
+
+#### 본격 클러스터링 ####
+rm(list=ls())
+
+wine <- read.table('wine.txt', header=F, sep=',')
+colnames(wine) <- c("Type", "Alcohol", "MalicAcid", "Ash",
+                    "AlcalinityOfAsh", "Magnesium", "TotalPhenols",
+                    "Flavanoids", "NonflavanoidPhenols", "Proanthocyanins",
+                    "ColorIntensity", "Hue", "OD280_OD315_OfDilutedWines", "Proline")
+wineType <- wine[,1] # 비교를 위해
+Wine <- wine[,-1] # unsupervised learning이기 때문에 정답은 지움
+
+#### 표준화 ####
+Wine <- as.data.frame(scale(Wine)) # scale 쓰면 얘가 알아서. 그런데 반환값이 matrix임
+class(Wine)
+
+#### k(군집수) 구하기 ####
+# install.packages('NbClust')
+library(NbClust)  # 최적의 k(cluster 개수, 군집수) 찾아주는 라이브러리
+
+KmeansClust <- NbClust(Wine, distance='euclidean', min.nc=2, max.nc=15, method='kmeans')
+# 약 30개의 척도를 가지고 군집을 평가해준 결과임
+# 결과를 보면 일반적인 기준에서 3개가 가장 좋다고
+
+KmeansClust$Best.nc # 각 척도에 의한 best 군집수와 결과값수치
+KmeansClust$Best.nc[1,]  # 각 척도에 의한 best 군집수만 가져오기
+table(KmeansClust$Best.nc[1,]) # best k가 3인 척도가 15개
+
+par(mfrow=c(1,1)) # 위 함수에서 자기 맘대로 두 칸으로 나눈듯-_-
+barplot(table(KmeansClust$Best.nc[1,]),
+        xlab='Number of Clusters',
+        ylab='Number of Criteria',
+        main='Number of Clusters Chosen by 26 Criteria')
+
+KmeansClust$All.index # 모든 척도에서 k의 변화에 따른 수치들
+class(KmeansClust$All.index) # matrix
+KmeansClust$All.index[,'Silhouette'] # silhouette 척도만 
+class(KmeansClust$All.index[,'Silhouette']) # numeric
+silhouette <- data.frame(KmeansClust$All.index[,'Silhouette'])
+names(silhouette) <- 'sil'
+
+# plot(silhouette$sil, type='b') # 이렇게 하면 그냥 index가 x축에 나오므로
+plot(silhouette$sil~row.names(silhouette), type='b') 
+# y에는 sil의 값들, silhouette 2부터 시작하게하려고. type='b'는 점+선(both) 그래프
+# 군집수(2~15)에 따른 silhouette 수치
+# 군집수가 3일 때 가장 높은 값을 가지는 결과
+
+
+#### K-means ####
+set.seed(1234)
+Kmeans_Fit <- kmeans(Wine, 3)
+Kmeans_Fit # 3개의 그룹으로 나눔. 각 변수의 각 그룹별 평균. 각 값들이 속한 그룹 번호.
+
+table(wineType, Kmeans_Fit$cluster)
+# 중요한건 모델을 구할 때 정답을 전혀 넣지 않았다는 것. unsupervised learning.
+# 그런데도 나중에 실제 type 과 비교해보면 꽤 잘 맞다는 것
+
+plot(Wine, pch=19, col=Kmeans_Fit$cluster)
+
+
+
+#### K-medoids #### 
+# 공간의 중심점이 아닌 중심 데이터를 고르는 방법
+library(cluster)
+
+kmedoid_fit <- pam(Wine, 3, diss=F) 
+# cluster 수 는 위에서 정해진 3? 거리가 계산된 값을 넣는다면 diss=T, 지금은 아니므로 diss=F
+kmedoid_fit # 첫번째 클러스터의 중심점은 36번째 개체이다.
+kmedoid_fit$silinfo  # 모든 개체에 대해 silhouette 값이 다 나옴
+kmedoid_fit$silinfo$avg.width
+
+## sil score 가 가장 높은 k 찾기
+## k-medoids를 이용한 가장 좋은 k 찾기 2 ~ 15
+AveSilhouette <- c()
+for (i in 2:15){
+  AveSilhouette[i] <- pam(Wine, i, diss=F)$silinfo$avg.width
+}
+AveSilhouette # index 1에는 값이 안들어가니까 NA가 나옴
+which.max(AveSilhouette) # 3
+
+plot(kmedoid_fit)  # 이미 아까 3으로 만들었으므로
+
+
+
+#### H-Clustering ####
+Wine
+
+DistWine <- dist(Wine, method='euclidean') # 이렇게 각 데이터간의 거리가 있는 거리값매트릭스?를 사용
+
+## 최단 연결법 
+HClust_Fit1 <- hclust(DistWine, method='single')
+plot(HClust_Fit1)
+rect.hclust(HClust_Fit1, k=3, border='red') # rect.hclust 는 완전히 나누는 건 아니고 자르면 어떻게 될지 보는 것? 일단 k는 3으로..
+HClust_Clust1 <- cutree(HClust_Fit1, k=3)
+table(wineType, HClust_Clust1) # bad...좋지않음
+
+## 최장 연결법
+HClust_Fit2 <- hclust(DistWine, method='complete')
+plot(HClust_Fit2) # 이것만 봐도 위보단 나아보임
+rect.hclust(HClust_Fit2, k=3, border='red')
+HClust_Clust2 <- cutree(HClust_Fit2, k=3)
+table(wineType, HClust_Clust2) # way better.. k-means보단 별로지만 
+# 다른 예1
+# k는 군집수. h는 깊이?거리?height? 옆에 y축 (가지끝에서부터 올라온 가지 깊이를 나타내는 듯..)
+rect.hclust(HClust_Fit2, h=8, border='red') 
+# 다른 예2
+# 지금은 wine type이 애초에 3군집인걸 알지만. 만약 모른다면 아까했던 최적k를 찾는 NbClust를 이용
+NB_HClust2 <- NbClust(Wine, distance='euclidean',
+                     min.nc=2, max.nc=15, method='complete') # 아까는 k-means였지만 지금은 최장연결법의 H-Clustering을 할 것이므로
+barplot(table(NB_HClust2$Best.nc[1, ])) # best k는 3..
+par(mfrow=c(1,1))
+
+## average linkage 평균연결법
+HClust_Fit3 <- hclust(DistWine, method='average') 
+plot(HClust_Fit3)
+rect.hclust(HClust_Fit3, k=3, border='red') # 이상한데..
+HClust_Clust3 <- cutree(HClust_Fit3, k=3)
+table(wineType, HClust_Clust3) # 확인해보니 역시 이상..
+NB_HClust3 <- NbClust(Wine, distance='euclidean',
+                     min.nc=2, max.nc=15, method='average') # best가 8?? 원래 타입은 3개인데..
+
+## centroid linkage 중심연결법
+HClust_Fit4 <- hclust(DistWine, method='centroid') 
+plot(HClust_Fit4)
+rect.hclust(HClust_Fit4, k=3, border='red') # 이상한데..
+HClust_Clust3 <- cutree(HClust_Fit4, k=3)
+table(wineType, HClust_Clust3) # 확인해보니 얘도 역시 이상..
+
+
+# 최장연결법이 가장 좋으므로..
+silhouette(HClust_Clust2, dist=DistWine) # 모든 개체의 실루엣 값들이 나옴
+plot(silhouette(HClust_Clust2, dist=DistWine), col=1:3)
+# 첫번째 클러스터에는 69개 데이터|평균 실루엣은 0.16..... 총 평균 실루엣은 0.2으로 성능 확인
+
+
+#### HeatMap : 클러스터 수의 근거를 시각화한 방법 중 하나? ####
+heatmap(as.matrix(Wine), # matrix 타입이어야
+        distfun=dist,
+        hclustfun=function(d) hclust(d, method='complete')) # d는 Wine 매트릭스에 dist 함수가 적용된 거리데이터
+# 컬럼은 각 변수를 나타냄. 하단에 변수명 표시. 좌측이 complete linkage h-clustering 결과.
+# 시각적으로 보고..아 3개면 되려나 라고 생각..?
+# 해석하긴 좀 어려움...빨간색일 수록 상관관계 높은 것..
+
+
+
+#### male-female 데이터 ####
+rm(list=ls())
+mf_dat_all <- read.table('male-female.txt', header=T)
+# for unsupervised learning
+mf_gender <- mf_dat_all[, names(mf_dat_all)=='gender']
+mf_dat <- mf_dat_all[, names(mf_dat_all)!='gender']
+
+# 표준화는 안해도 될 듯?
+
+## K-means Clustering
+# 목표 군집수 k는 2지만 최적 k를 찾아봄
+library(NbClust)
+mf_kmeans_bestnc <- NbClust(mf_dat, distance='euclidean', method='kmeans') # the best number of clusters is 2
+# 최적 군집수 k 근거 시각화
+par(mfrow=c(1,1))
+barplot(table(mf_kmeans_bestnc$Best.nc[1,]),
+        xlab='the Number of Clusters',
+        ylab='the Number of Criteria',
+        main='the Number of Clusters Chosen by 26 Criteria')
+# Silhouette 수치로 최적 군집수 k 근거 시각화
+sil_idx <- mf_kmeans_bestnc$All.index[,'Silhouette']
+cl_n <- names(mf_kmeans_bestnc$All.index[,'Silhouette'])
+plot(sil_idx~cl_n, type='b',
+     main='')
+# clustering
+mf_kmeans_c <- kmeans(mf_dat, 2)
+table(mf_gender, mf_kmeans_c$cluster) # 3개 틀림
+plot(mf_dat, pch=19, col=mf_kmeans_c$cluster) # 클러스터링 결과 시각화
+
+
+## K-medoids Clustering
+library(cluster)
+# k-medoids clustering시 최적 군집수 k 찾기
+# silhouette 이용: sil score가 가장 높은 값
+avg_sils <- c()
+for (i in 2:15){
+  avg_sils[i] <- pam(mf_dat, i, diss=F)$silinfo$clus.avg.width
+}
+which.max(avg_sils) # 2: sil score가 가장 높은 cluster 수
+# clustering
+mf_kmedoids_c <- pam(mf_dat, 2, diss=F)
+plot(mf_kmedoids_c)
+table(mf_gender, mf_kmedoids_c$clustering) # 2 개 틀림. k-means보다 나음.
+
+
+## H-Clustering
+# distance 구하기: hclust는 거리데이터를 넣어야 함
+d_mf <- dist(mf_dat, method='euclidean')
+
+# Clustering with complete linkage
+# 원 데이터로 best nc 한번 구해보기
+mf_cmpl_bestnc <- NbClust(mf_dat, distance='euclidean', min.nc=2, max.nc=15, method='complete') # the best nc is 2
+table(mf_cmpl_bestnc$Best.nc[1,]) # 2 is the best!
+par(mfrow=c(1,1))
+# clustering
+mf_hc_cmpl <- hclust(d_mf, method='complete')
+plot(mf_hc_cmpl) # clustering 결과 시각화
+rect.hclust(mf_hc_cmpl, k=2, border='red') # 2 clusters 미리보기
+mf_hc_cmpl2 <- cutree(mf_hc_cmpl, k=2)
+table(mf_gender, mf_hc_cmpl2) # 3 개 틀림. k-means와 동일
+
+# Clustering with simple linkage
+# best nc 한번..
+mf_sing_bestnc <- NbClust(mf_dat, distance='euclidean', min.nc=2, max.nc=15, method='single') # 3..??
+table(mf_sing_bestnc$Best.nc[1,]) # 3?? 흠..이미 불안..
+par(mfrow=c(1,1))
+# clustering
+mf_hc_sing <- hclust(d_mf, method='single')
+plot(mf_hc_sing) # 시각화
+rect.hclust(mf_hc_sing, k=2, border='red') # 미리보기.. 쯧...
+mf_hc_sing2 <- cutree(mf_hc_sing, k=2)
+table(mf_gender, mf_hc_sing2) # 11개 틀림..몹시 나쁨..
+
+# Clustering with average linkage
+# best nc..
+NbClust(mf_dat, distance='euclidean', min.nc=2, max.nc=15, method='average') # 2
+par(mfrow=c(1,1))
+# clustering
+mf_hc_avg <- hclust(d_mf, method='average')
+plot(mf_hc_avg) # 시각화
+rect.hclust(mf_hc_avg, k=2, border='red') # 미리보기
+mf_hc_avg2 <- cutree(mf_hc_avg, k=2)
+table(mf_gender, mf_hc_avg2) # 2개 틀림. k-medoids와 동일하게 very good
+
+# Clustering with centroid linkage
+# best nc..
+NbClust(mf_dat, distance='euclidean', min.nc=2, max.nc=15, method='centroid') # 2
+par(mfrow=c(1,1))
+# clustering
+mf_hc_cent <- hclust(d_mf, method='centroid')
+plot(mf_hc_cent) # 시각화 -_-??
+rect.hclust(mf_hc_cent, k=2, border='red') # 미리보기
+mf_hc_cent2 <- cutree(mf_hc_cent, k=2)
+table(mf_gender, mf_hc_cent2) # 3개 틀림..not bad..
+
+## k-medoids clustering 과 H-Clustering with average linkage 이 best
+## 성능평가
+# k-medoids clustering 결과
+silhouette(mf_kmedoids_c$clustering, dist=d_mf)
+plot(silhouette(mf_kmedoids_c$clustering, dist=d_mf), col=1:2) # Avg Sil : 0.44
+# H-Clustering with average linkage 결과
+silhouette(mf_hc_avg2, dist=d_mf)
+plot(silhouette(mf_hc_avg2, dist=d_mf), col=1:2) # Avg Sil : 0.44
+# 성능 동일!!
+
+
+#### wheat 데이터 ####
+rm(list=ls())
+# 준비 
+wheat_all <- read.table('wheat.txt', header=T, fileEncoding = 'cp949')
+wheat_type <- wheat_all[,names(wheat_all)=='종류']
+wheat_dat <- wheat_all[,names(wheat_all)!='종류']
+
+# 데이터 표준화
+wheat_dat <- as.data.frame(scale(wheat_dat))
+str(wheat_dat)
+
+## K-means Clustering
+# best nc 
+unique(wheat_type) # 일단 목표는 3가지..
+# 그래도 일단 연습겸 찾아보기
+library(NbClust)
+wheat_kmeans_bestnc <- NbClust(wheat_dat, distance='euclidean', method='kmeans') # min.nc=2, max,nc=15는 default
+# best nc is 3
+par(mfrow=c(1,1))
+# 시각화
+barplot(table(wheat_kmeans_bestnc$Best.nc[1,]),
+        main='The best number of clusters chosen by 26 criteria')
+# silhouette 값 시각화
+plot(wheat_kmeans_bestnc$All.index[,'Silhouette']~names(wheat_kmeans_bestnc$All.index[,'Silhouette']), type='b')
+# clustering
+wheat_kmeans_c <- kmeans(wheat_dat, 3)
+unique(wheat_type)[wheat_kmeans_c$cluster] # 아마 이렇게 해야..??
+table(wheat_type, unique(wheat_type)[wheat_kmeans_c$cluster]) # 17개 틀림..
+par(family = "Apple SD Gothic Neo") 
+plot(wheat_dat, pch=19, col=wheat_kmeans_c$cluster) # clustering 결과 시각화.
+
+## K-medoids Clustering
+# best nc
+library(cluster)
+avg_sils <- c()
+for(i in 2:15){
+  avg_sils[i] <- pam(wheat_dat, i, diss=F)$silinfo$avg.width
+}
+which.max(avg_sils) # 2..이미 불안..
+# clustering
+heat_kmedoids_c <- pam(wheat_dat, 3)
+table(wheat_type, unique(wheat_type)[heat_kmedoids_c$clustering]) # 19개 틀림..
+plot(heat_kmedoids_c) # 결과 시각화
+
+## H-Clustering 
+d_wheat <- dist(wheat_dat, method='euclidean')
+
+# with complete linkage
+# best nc..
+wheat_bestnc_cmpl <- NbClust(wheat_dat, distance='euclidean', method='complete') # the best is 3
+table(wheat_bestnc_cmpl$Best.nc[1,])
+par(mfrow=c(1,1))
+# clustering 
+wheat_hc_cmpl <- hclust(d_wheat, method='complete')
+plot(wheat_hc_cmpl) # 시각화
+rect.hclust(wheat_hc_cmpl, k=3, border='red') # 미리보기
+wheat_hc_cmpl3 <- cutree(wheat_hc_cmpl, k=3)
+table(wheat_type, unique(wheat_type)[wheat_hc_cmpl3]) # 22개 틀림..
+
+# with single linkage
+# best nc..
+wheat_bestnc_sing <- NbClust(wheat_dat, distance='euclidean', method='single') # 2.. 불안한데..
+par(mfrow=c(1,1))
+# clustering 
+wheat_hc_sing <- hclust(d_wheat, method='single')
+plot(wheat_hc_sing) # 헐..
+rect.hclust(wheat_hc_sing, k=3, border='red') # ㄷㄷ..
+wheat_hc_sing3 <- cutree(wheat_hc_sing, k=3)
+table(wheat_type, unique(wheat_type)[wheat_hc_sing3]) # 최악..
+
+# with average linkage 
+# best nc..
+wheat_bestnc_avg <- NbClust(wheat_dat, distance='euclidean', method='average') # 3
+par(mfrow=c(1,1))
+# clustering 
+wheat_hc_avg <- hclust(d_wheat, method='average')
+plot(wheat_hc_avg) # 시각화
+rect.hclust(wheat_hc_avg, k=3, border='red') # 미리보기
+wheat_hc_avg3 <- cutree(wheat_hc_avg, k=3)
+table(wheat_type, unique(wheat_type)[wheat_hc_avg3]) # 25개 틀림..
+
+# with centroid linkage
+# best nc..
+wheat_bestnc_cent <- NbClust(wheat_dat, distance='euclidean', method='centroid') # 2..ㄷㄷ
+par(mfrow=c(1,1))
+# clusterig
+wheat_hc_cent <- hclust(d_wheat, method='centroid')
+plot(wheat_hc_cent)
+rect.hclust(wheat_hc_cent, k=3) # 망..
+wheat_hc_cent3 <- cutree(wheat_hc_cent, k=3)
+table(wheat_type, unique(wheat_type)[wheat_hc_cent3]) # 망..79개 틀림..
+
+## K-means clustering 이 17개 틀려서 best! clustering이 쉽지는 않은 데이터인듯
+# 성능평가
+silhouette(wheat_kmeans_c$cluster, dist=d_wheat)
+plot(silhouette(wheat_kmeans_c$cluster, dist=d_wheat), col=1:3) # avg sil: 0.4
+
+```

@@ -1,0 +1,490 @@
+---
+title: "tidyr 활용"
+output: html_notebook
+---
+
+``` {r tidyr}
+rm(list=ls())
+library(tidyverse) # tidyr이 포함
+
+#################### gather ####################
+
+# tidyr 내장 데이터
+print(table4a) # wide format
+
+##### Using dplyr
+bind_rows(table4a %>% 
+            select(country, cases='1999') %>% 
+            mutate(year=1999), 
+          table4a %>% 
+            select(country, cases='2000') %>% 
+            mutate(year=2000)) %>% 
+  select(country, year, cases)
+
+
+##### Using tidyr
+table4a %>% 
+  gather(key = "year", value = "cases", '1999', '2000') 
+# key, value에는 새로운 key, value 컬럼의 "NAME"
+# 뒤에는 변형할 컬럼들. 생략하면 전부다..
+
+table4a %>% 
+  gather(key = "year", value = "cases", 2, 3) # 컬럼 인덱스로도 됨..
+
+
+##### lamp 데이터
+lamp <- read_csv("streetlamp.csv", locale=locale(encoding='CP949'))
+
+head(lamp) # wide format
+
+# long format으로 변환
+lamp_long <- lamp %>%
+  gather(key='year', value='count', '2011년', '2012년', '2013년', '2014년')
+lamp_long <- lamp %>% 
+  gather(key = year, value = lamp, "2011년", "2012년", "2013년", "2014년") # 둘다되네..
+
+# 다양한 방법들 - 컬럼 명시하는 방법..
+lamp_long <- lamp %>% 
+  gather(key = year, value = lamp, 2:5) # 컬럼 인덱스로
+lamp_long <- lamp %>% 
+  gather(key = year, value = lamp, paste0(2011:2014, '년')) # 열 이름을 paste0로 생성
+paste0(2011:2014, '년') # 각각의 값에 붙여주네..
+lamp_long <- lamp %>% 
+  gather(key = year, value = lamp, ends_with('년')) # '년'으로 끝나는 열. 해당 변수들을 모두 가져옴
+
+# 플라팅
+ggplot(data = lamp_long, aes(x = year, y = lamp, fill=year)) + 
+  geom_boxplot() + 
+  labs(title = "가로등 연도별 boxplot", x = "연도", y = "가로등 수") + 
+  guides(fill=guide_legend(title='연도')) +
+  theme(text = element_text(family = "Apple SD Gothic Neo")) # Mac에서 실행
+
+
+#################### Spread ####################
+
+
+# tidyr 내장 데이터
+print(table2) # long format
+
+##### Using dplyr
+inner_join(table2 %>%
+             filter(type == 'cases') %>% 
+             select(-type) %>% 
+             rename(cases=count), 
+           table2 %>% 
+             filter(type == 'population') %>% 
+             select(-type) %>% 
+             rename(population=count), 
+           by = c('country', 'year')) # inner_join 
+
+##### Using tidyr
+table2 %>% 
+  spread(key = type, value = count) # 이렇게하면 년도로 이루어진  wide format 만들어짐
+
+# table2 %>% 
+#   spread(key = type, value = count) %>% 
+#   spread(key = type, value = '2000') # 해당 value가 없으면 NA로 들어감. 이건 로직이 꼬인 것..
+
+table2 %>% 
+  spread(key = type, value = count) %>% 
+  spread(key = year, value = cases) # 해당 value가 없으면 NA로 들어감
+
+#################### separate ####################
+
+# tidyr 내장 데이터
+View(table3)
+
+##### Using dplyr
+library(stringr) # tidyr 안쓰고 다른거 쓰면 얼마나 복잡한가
+str_split_fixed('안녕_하세요', '_', 2)
+str_split_fixed(c('안녕_하세요', '안녕', '안_녕'), '_', 2)
+
+split_string_2 <- function (x, sep, i) {
+  splited <- str_split_fixed(x, sep, 2)
+  return(splited[, i])
+} # split 해서 i번째 가져오는 함수
+
+# stringr 패키지를 이용한 함수 이용
+table3 %>% 
+  mutate(cases = split_string_2(rate, '/', 1), 
+         population = split_string_2(rate, '/', 2)) %>% 
+  select(-rate)
+
+# 정규표현식 이용
+table3 %>% 
+  mutate(cases = gsub('/.+', '', rate), 
+         population = gsub('.+/', '', rate)) %>%
+  select(-rate)
+
+
+
+##### Using tidyr
+table3 %>% 
+  separate(col = rate, into = c('cases', 'population'))
+?separate
+
+table3 %>% 
+  separate(col = rate, into = c('cases', 'population'), sep='/') # chr 타입으로 반환하는 듯
+
+# convert 옵션으로 변수별 클래스를 자동으로 맞춤
+table3 %>% 
+  separate(col = rate, into = c('cases', 'population'), convert=T) # convert 옵션을 주면 맞는 클래스 추정해서 자동 변환
+# int 타입으로 반환
+
+# sep에 숫자를 넣어서 문자의 개수로 나누기
+table3 %>% 
+  separate(col = year, into = c("century", "year"), sep = 2) # 2는 구분자가 아니라 몇번째 character 기준으로 쪼개는지
+
+
+#################### unite ####################
+
+# tidyr 내장 데이터
+View(table5)
+
+##### Using dplyr
+table5 %>% 
+  mutate(new = paste0(century, year)) %>%  # 여기까지만하면 추가 됨
+  select(-century, -year)  # 원래 두 개 제거
+
+##### Using tidyr
+table5 %>% 
+  unite(col = new, century, year)
+
+# sep의 기본값이 '_' 이기에 이를 ''로 강제한다.
+table5 %>% 
+  unite(col = new, century, year, sep = "") # %>% View
+
+
+
+#################### 실습(1) ####################
+
+
+# 1. 다음 wide format의 지하철 환승 데이터를 이용하여 
+# long format으로 변환한 뒤, 이를 다시 wide format으로 변환하세요.
+metro_transfer <- read_csv('seoul_metro_transfer.csv', locale=locale(encoding='UTF-8'))
+names(metro_transfer)[1] <- '순번' # 첫 열 이름이 "\"순번\""로 입력되어 수정
+head(metro_transfer) # View(metro_transfer)
+str(metro_transfer)
+
+metro_transf_long <- gather(metro_transfer, key="day", value="count", 3:5)
+metro_transf_long <- metro_transfer %>% gather(key="day", value="count", 3:5)
+metro_transf_long <- metro_transfer %>% gather(key="day", value="count", ends_with("일")) # ends_with help page 참고!!
+
+spread(metro_transf_long, key="day", value="count")
+metro_transf_long %>% spread(key="day", value="count")  # 평일, 토요일, 일요일 순 하려면??
+
+
+# 2. 1에서 만든 long format을 이용하여 자주 이용하는 환승역 3개에 대하여 
+# bar chart를 그리세요. fill을 요일로 설정하세요.
+
+sort(unique(metro_transf_long$역명)) # 존재하는 역명 - 가나다 순
+class(metro_transf_long)
+head(metro_transf_long)
+
+freq_plot <- metro_transf_long[metro_transf_long$역명 %in% c("고속터미널","사당","당산"),]
+# dplyr
+freq_plot <- metro_transf_long %>% filter(역명 %in% c('고속터미널','사당','당산'))
+
+ggplot(data=freq_plot,
+       aes(x=역명, y=count, fill=day))+
+  geom_bar(stat = "identity")+
+  theme(text=element_text(family="NanumGothic"))
+
+
+# 많이 이용하는 지하철역 찾기
+# 3개만 출력
+metro_transf_long %>% 
+  group_by(역명) %>% 
+  summarise(승객수= sum(count)) %>% 
+  top_n(3,승객수)
+
+metro_transf_long %>% 
+  group_by(역명) %>% 
+  summarise(승객수= sum(count)) %>% 
+  arrange(desc(승객수))
+
+
+
+# 3. 다음과 같이 2개의 그림을 한 그래프 위에 그릴 수 있습니다.
+# 그런데 범례가 제대로 안나오죠.
+# tidyr을 이용해서 long format으로 바꾼 뒤, 범례까지 잘 나오게 그려봅시다.
+library(readxl)
+
+# 출처
+# http://stat.seoul.go.kr/octagonweb/jsp/WWS7/WWSDS7100.jsp?re_stc_cd=8001&re_lang=kor
+
+pop <- read_excel('population.xls')
+pop %>% head # pop %>% View
+tail(pop) # 마지막 행이 NA로 채워짐
+
+pop <- pop[-dim(pop)[1], ] # 마지막 NA 제거
+tail(pop)
+
+pop$기간 <- as.integer(pop$기간)
+ggplot(data = pop) + 
+  geom_line(aes(x = 기간, y = 여자), colour = 1) +
+  geom_line(aes(x = 기간, y = 남자), colour = 2) + 
+  labs(y = '인구') + 
+  theme(text=element_text(family='NanumGothic'))
+
+### 여기부터 작성해보세요.
+pop %>%  head # pop %>%  View
+pop_long <- pop %>% 
+  gather(key='성별',value='인구', 남자,여자)
+ggplot(data=pop_long,
+       aes(x=기간, y=인구,colour=성별)) +
+  geom_line() +
+  # guides(colour=guide_legend(title='성별')) +  # -_-??? 쓰나 안쓰나 상관없나?
+  theme(text=element_text(family='NanumGothic'))
+
+# 풀이
+pop_long <- pop %>% 
+  select(기간, 남자, 여자) %>% 
+  gather('성별', '인구', -기간)
+
+ggplot(data=pop_long, aes(x = 기간, y = 인구, colour = 성별)) +
+  geom_line() + 
+  theme(text=element_text(family='NanumGothic'))
+
+
+# 4. 같은 방법으로 연령대에 대하여 꺾은선 그래프를 그려보세요.
+pop_long2 <- pop %>%
+  gather('연령대', '인구', '0~14세','15~64세','65세이상')
+
+ggplot(data=pop_long2, aes(x=기간, y=인구, colour=연령대)) +
+  geom_line() +
+  theme(text=element_text(family='NanumGothic'))
+  
+
+
+
+#################### 실습 (2) ####################
+
+# 1. lamp 데이터를 long format으로 다시 한번 변환하고, 
+# 연도를 century와 연도로 나누어보세요. (Ex) 2011년 -> 20, 11년
+lamp <- read_csv("streetlamp.csv", locale=locale(encoding='CP949'))
+head(lamp)
+
+# long format으로 변환
+lamp_long <- lamp %>% 
+  gather(key='year', value='lamp', ends_with('년'))
+
+# 연도를 century와 연도로 나누기
+lamp_long_sep <- lamp_long %>% 
+  separate(col=year, into=c('century','연도'), sep=2)
+lamp_long_sep$연도 <- gsub(pattern='년',replace='',lamp_long_sep$연도)
+?str_replace
+?gsub
+lamp_long_sep
+
+# 풀이
+lamp <- read_csv("streetlamp.csv", locale=locale(encoding='CP949'))
+
+lamp_long <- lamp %>% 
+  gather(key = year, value = lamp, "2011년", "2012년", "2013년", "2014년")
+
+lamp_long %>% 
+  separate(year, into = c('century', '연도'), sep=2) %>% 
+  mutate(연도 = gsub('년', '', 연도))  # 컬럼 추가가 아니라 컬럼 내용을 변경할 때도!
+
+lamp_long %>% 
+  spread(year, lamp)
+
+
+
+# 월별 버스 승하차 데이터
+# http://data.seoul.go.kr/openinf/sheetview.jsp?tMenu=11&leftSrvType=S&infId=OA-12913
+
+# 용량이 너무 커서 2017년 8월 데이터만 사용
+# bus_count <- read_csv('bus_count.csv', locale=locale(encoding='UTF-8'))
+# names(bus_count)[1] <- '사용년월'
+# bus_count %>%
+#   filter(사용년월 == 201708) %>% write_csv('bus_count_201708.csv')
+
+bus_count <- read_csv('bus_count_201708.csv', locale=locale(encoding='UTF-8'))
+head(bus_count)
+names(bus_count)
+bus_count %>%  head # bus_count %>%  View
+
+# 2. 위 승하차 데이터에서 승하차 승객수에 대하여 long format으로 변환하고
+# 시간과 승차/하차를 나누세요.
+# (Ex) 20시승차승객수 -> 20, 승차승객수
+######### 모든 역에 대해서 시행하면 오래걸립니다. 
+######### 좋아하는 노선번호 3개를 골라서 시행하세요.
+spec(bus_count)
+# bus_count %>% filter(노선번호 %in% c('401', '420', '472')) %>% View
+bus_count %>% filter(노선번호 %in% c('401', '420', '472')) %>% head
+bus_count %>% 
+  filter(노선번호 %in% c('401', '420', '472')) %>% 
+  gather(key='승차시간', value='승차', ends_with('승차총승객수')) %>% 
+  gather(key='하차시간', value='하차', ends_with('하차총승객수'))  # 이건 삽질..풀이 참고
+    
+  
+# 풀이
+bus_count %>% 
+  filter(노선번호 %in% c('144', '101', '성북04', 'N61')) %>% 
+  gather(key = 'type', value = 'count', ends_with('승객수')) %>% # 알아서 컬럼 제목별로 다른 value로 들어감
+  separate(col = type, into = c('time', 'type'), sep = '시', convert=T) %>%  # 시를 알아서 제거하면서 나눠짐 
+  head # View()
+  
+
+
+
+#################### 실습 추가 ####################
+
+# 1. 위 버스 데이터로부터 시간별 승차 및 하차 꺾은선 그래프를 그리세요.
+# 자신이 이용하는 노선 3개 버스에 대해서 정류장 상관 없이 전부 더할 것
+# 승차와 하차는 구분
+
+# 위 버스 데이터
+bus_cnt_long <- bus_count %>% 
+                  filter(노선번호 %in% c('401','420','472')) %>% 
+                  gather(key='type', value='count', ends_with('승객수')) %>% 
+                  separate(col=type, into=c('time','type'), sep='시', convert=T) 
+# 각 노선의 시간별 승차 및 하차 승객수 
+bus_plot <- bus_cnt_long %>% 
+              group_by(노선번호, type, time) %>% 
+              summarise(sum = sum(count))
+
+ggplot(data=bus_plot, aes(x=time, y=sum, colour=노선번호)) +
+  geom_line() +
+  theme(text=element_text(family='NanumGothic'))  # 승차/하차 구분이 안됨..풀이 참고
+
+## 풀이 ##
+my_bus <- bus_count %>% 
+  filter(노선번호 %in% c('144', '101', '성북04', 'N61')) %>% 
+  gather(key = 'type', value = 'count', ends_with('승객수')) %>% 
+  group_by(노선번호, type) %>% 
+  summarise(count_sum = sum(count)) %>% 
+  separate(col = type, into = c('time', 'type'), sep = '시', convert=T)
+
+# facet
+qplot(x = time, y = count_sum, colour = type, 
+      data = my_bus, 
+      geom = 'line') + 
+  facet_wrap(~노선번호) + # 노선번호 별로 나눠서 그려주는 듯?
+  theme(text = element_text(family='Apple SD Gothic Neo'))
+
+# 한번에 나타내기
+qplot(x = time, y = count_sum, colour = number_type, 
+      data = my_bus %>% 
+        unite('number_type', 노선번호, type),  # 오...노선번호와 승/하차를 아예 변수 종류로 합침..
+      geom = 'line') + 
+  theme(text = element_text(family='Apple SD Gothic Neo'))
+
+
+
+
+# 2. 노선번호가 같은데 노선명이 다른 짝(pair)이 12개 있습니다.
+# 직접 세지 말고 dplyr을 이용해서 이 짝을 찾아보세요.
+
+# 다른 데이터가 있다는 것을 확인
+bus_count %>% 
+  distinct(노선번호, 노선명) %>% # %>% View
+  dim() # [1] 622   2
+
+bus_count %>% 
+  distinct(노선번호) %>% 
+  dim()  # [1] 610   1
+
+bus_count %>% 
+  distinct(노선명) %>% 
+  dim()  # [1] 622   1
+
+# 노선번호-노선명 짝으로는 622쌍이 있는데, 노선번호 종류는 610개, 노선명 종류는 622개
+# 노선명에 있는 12개가 문제인듯
+
+## 풀이 ##
+bus_count %>% 
+  distinct(노선번호, 노선명) %>% 
+  group_by(노선번호) %>% 
+  summarise(number = n()) %>%  # 노선번호로 group 묶었을 때 노선명이 여러개이면 개수가 2개 이상
+  arrange(desc(number)) %>%  
+  print(n = 12) # 12개 출력
+
+# 이게 더 맞지 않을까?
+bus_count %>% 
+  distinct(노선번호, 노선명) %>% 
+  group_by(노선번호) %>% 
+  summarise(number = n()) %>% 
+  filter(number>1) 
+
+
+# 3. 다음 일별 지하철 승하차 데이터에서, 
+# 2016년 데이터를 모두 다운받아 데이터프레임을 한개로 합치세요.
+# http://data.seoul.go.kr/openinf/fileview.jsp?infId=OA-12914
+# 인코딩은 CP949로 하세요.
+
+file_list <- paste0('daily_metro/', list.files('daily_metro')) # 우와...
+# 지금 directory에서 daily_metro 경로 안의 파일 명을 다 가져옴 
+file_list %>% class # 그냥 character vector
+## 풀이 ##
+
+# lapply 이용
+daily_metro_aggregated <- 
+  bind_rows(lapply(file_list, read_csv, locale=locale(encoding='CP949')))
+# 우오ㅓ....각각의 파일명으로 read_csv 적용하면서 bind_row
+# daily_metro_aggregated %>% View
+daily_metro_aggregated %>% head
+
+# for loop 이용 (1)
+data_list <- vector('list', length(file_list)) # length(file_list) 길이의 빈 list 생성?
+data_list %>% class # list
+for (i in 1:length(file_list)) {
+  data_list[[i]] <- read_csv(file_list[i], locale=locale(encoding='CP949'))
+}
+data_list %>% class # list
+data_list[[i]] %>% class # "tbl_df"     "tbl"        "data.frame"
+daily_metro_aggregated <- bind_rows(data_list) # 우와..read_csv로 읽어온 데이터를 list에 담아서 bind_row하면 다 합쳐줌
+daily_metro_aggregated %>% class
+# daily_metro_aggregated %>%  View
+daily_metro_aggregated %>%  head
+
+# for loop 이용 (2) - (1)보다 느림
+daily_metro_aggregated <- NULL
+for (i in 1:length(file_list)) {
+  daily_metro_aggregated <- 
+    bind_rows(daily_metro_aggregated, 
+              read_csv(file_list[i], locale=locale(encoding='CP949')))
+}
+
+
+
+
+# 4. 3에서 만든 데이터를 이용하여 집 근처의 지하철 역 3개를 선택하고, 
+# 그 역의 월별 승하차 데이터를 산출하세요.
+# 산출한 데이터를 이용하여 꺾은선 그래프를 그려보세요.
+
+# daily_metro_aggregated %>% View
+daily_metro_aggregated %>% head
+my_metro <- daily_metro_aggregated %>% 
+              filter(역명 %in% c('사당','약수','잠실')) %>% 
+              separate(col=사용일자, into=c('yyyy','mm','dd'), sep=c(4,6), convert=T) %>%  # convert=T를 안하면 에러!!문자니까!!
+              gather(key='type', value='cnt', ends_with('승객수')) %>% 
+              group_by(역명, mm, type) %>% 
+              summarise(sum = sum(cnt))
+# facet - 나눠서그리기              
+qplot(x=mm, y=sum, colour=type, 
+      data=my_metro, 
+      geom='line') +
+  facet_wrap(~역명) +
+  theme(text = element_text(family='Apple SD Gothic Neo')) # x축 월이 제대로 안찍힘
+# 역_승하차 로 색 나누기
+qplot(data=my_metro %>% unite('역_승하차',역명,type),
+      x=mm, y=sum, colour=역_승하차, geom='line') +
+  theme(text=element_text('NanumGothic'))
+
+## 풀이 ##
+monthly_metro <- daily_metro_aggregated %>% 
+  filter(역명 %in% c('보문', '학동', '약수')) %>% 
+  separate(사용일자, c('연도', '월', '일'), sep = c(4, 6), convert=T) %>% 
+  group_by(월, 역명) %>% 
+  summarise(승차승객수 = sum(승차총승객수), 하차승객수 = sum(하차총승객수)) %>% 
+  gather(승하차, 승객수, 3:4) %>% 
+  unite('역_승하차', 역명, 승하차)
+
+qplot(data = monthly_metro, x = 월, y = 승객수, colour = 역_승하차, geom = 'line') + 
+  theme(text = element_text(family='Apple SD Gothic Neo'))
+
+
+```

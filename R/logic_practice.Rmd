@@ -1,0 +1,197 @@
+---
+title: "로직 연습"
+output: html_notebook
+---
+
+``` {r logic prac}
+#### 동전 던지기! ####
+rm(list = ls())
+## 동전 던지기 5000번
+cnt <- 0
+rates <- c()
+# plot(1:5000, 0:1, type="n") XXXX 아래 참고!!!
+for (i in 1:5000) {
+  result = sample(x = 1:2, size = 1, replace = T)
+  # 1 : 앞면
+  if (result == 1) {
+    cnt <- cnt + 1
+  }
+  head_rate = cnt/i
+  rates<- c(rates, head_rate) # 벡터로 저장
+}
+
+## 풀이
+plot(x = 0, y = 0,
+     xlim = c(0, 5000), ylim = c(0, 1)) # xlim: x 축 범위(시작점, 끝점), ylim: y 축 범위(시작점, 끝점) 
+abline(a=0.5, b=0, col="red", lwd=3) # 라인더하기 (y절편, 기울기, 색, 두께)
+iteration <- 5000
+head <- 0
+for (i in 1:iteration) {
+  # 동전 던지기
+  coin <- sample(x=c("앞면","뒷면"), size=1, replace=T)
+  
+  # 여태까지 나온 앞면의 개수
+  if (coin == "앞면") {
+    head <- head + 1
+  }
+  
+  # 앞면이 나온 비율(probability)
+  prob <- head / i
+  
+  # 그래프
+  points(i, prob)
+}
+
+#### 동전 시뮬레이션 2 ####
+plot(x = 0, y = 0,
+     xlim = c(0, 5000), ylim = c(0, 1)) # xlim: x 축 범위(시작점, 끝점), ylim: y 축 범위(시작점, 끝점) 
+abline(a=0.5, b=0, col="red", lwd=3) # 라인더하기 (y절편, 기울기, 색, 두께)
+iteration <- 5000
+head <- 0
+prob <- c()
+# prob <- rep(0, 5000) # 이렇게 할 수도
+for (i in 1:iteration) {
+  # 동전 던지기
+  coin <- sample(x=c("앞면","뒷면"), size=1, replace=T)
+  
+  # 여태까지 나온 앞면의 개수
+  if (coin == "앞면") {
+    head <- head + 1
+  }
+  
+  # 앞면이 나온 비율(probability)
+  prob[i] <- head/i
+}
+# 그래프
+points(x=1:iteration, y=prob, type="l", lwd=2) # 이게 포문돌면서 한번씩 하는 것보다 부하가 적다..??? 내부 로직은 똑같을 텐데?
+# 참고
+# 아래 코드보다
+1+1
+2+2
+3+3
+# 아래 코드가 더 빠르고 부하가 적게 걸림
+c(1,2,3) + c(1,2,3)
+
+head(prob)
+prob[1000]
+
+# 주사위 라면 sample(x=1:6, size=1, replace=T) 으로 변경
+
+#### 연습 ####
+plot(x=NULL, y=NULL, xlim=c(0,5000), ylim=c(0,1), xlab="filps", ylab="rate")
+abline(a=0.5, b=0, col="red", lwd=2) 
+flips <- 5000
+cnt <- 0
+headRates <- c()
+for (i in 1:flips){
+  result <- sample(x=c("앞면", "뒷면"), size=1)
+  if (result=="앞면"){
+    cnt <- cnt + 1
+  }
+  headRates[i] <- cnt/i
+  # points(x= i, y=cnt/i)
+  # # points(x= i, y=cnt/i, type="l") # 이렇게 하나씩 찍을 때는 type="l" 안먹힘..
+}
+points(x=1:flips, y=headRates, type="l", lwd=2)
+
+
+
+
+#### 거스름돈 계산 ####
+# 손님이 낸 돈과 받아야 할 돈 입력하면 거스름돈 어떻게 주어야할지 계산하여라
+# 5만원권, 10000원권, 5000원권, 1000원권, 500원권, 100원권
+x <- 100000 # 손님이 낸 돈  
+y <- 22000 # 받아야할 돈
+diff <- x-y
+change <- c(50000, 10000, 5000, 1000, 500, 100)
+changeN <- c()
+for (i in 1:length(change)) {
+  changeN <- c(changeN,  diff %/% change[i])
+  diff <- diff %% change[i]
+  print(paste0(change[i], "원짜리 ", changeN[i], "개"))
+}
+
+# 화폐의 개수를 벡터로 나타내기. function() 활용
+# x: 손님이 낸 돈, y: 받아야 할 돈 
+myChange <- function(x, y){
+  MoneyUnits <- c(50000, 10000, 5000, 1000, 500, 100, 10)
+  diff <- x-y
+  changeN <- c()
+  for (i in 1:length(MoneyUnits)) {
+    changeN <- c(changeN,  diff %/% MoneyUnits[i])
+    diff <- diff %% MoneyUnits[i]
+    # print(paste0(change[i], "원짜리 ", changeN[i], "개"))
+  } 
+  return (changeN)
+}
+myChange(100000, 22000)
+myChange(50000, 22000)
+
+
+# + 알파
+# X : 나의 돈
+# Y : 물건 가격
+# 물건 가격 < 나의 돈   -> "Out of Money"
+# 물건 가격 = 나의 돈   -> "No Change"
+myChange2 <- function(x, y){
+  MoneyUnits <- c(50000, 10000, 5000, 1000, 500, 100, 10)
+  diff <- x-y
+  changeN <- c()
+  if (diff < 0) {
+    print("Out of Money")
+  } else if (diff == 0) {
+    print("No Change")
+  } else {
+    for (i in 1:length(MoneyUnits)) {
+      changeN <- c(changeN,  diff %/% MoneyUnits[i])
+      diff <- diff %% MoneyUnits[i]
+      # print(paste0(change[i], "원짜리 ", changeN[i], "개"))
+    } 
+  }
+  
+  return (changeN)
+}
+
+myChange2(1000, 5000)
+myChange2(1000, 1000)
+myChange2(1000, 980)
+
+
+#### 거스름돈 계산 풀이 ####
+# 1)
+MoneyUnits <- c(50000, 10000, 5000, 1000, 500, 100, 10)
+x <- 100000
+y <- 22780
+rest <- x-y
+change <- c()
+for (i in 1:length(MoneyUnits)) {
+  change[i] <- rest %/% MoneyUnits[i]
+  rest <- rest %% MoneyUnits[i]
+} 
+names(change) <- MoneyUnits
+change
+class(change)
+
+# 2) 
+changeAlgorithm <- function(x, y){
+  MoneyUnits <- c(50000, 10000, 5000, 1000, 500, 100, 10)
+  rest <- x-y
+  change <- c()
+  if (rest < 0) {
+    change <- "Out of Money"
+  } else if (rest == 0) {
+    change <- "No Change"
+  } else {
+    for (i in 1:length(MoneyUnits)) {
+      change[i] <- rest %/% MoneyUnits[i]
+      rest <- rest %% MoneyUnits[i]
+    } 
+    names(change) <- MoneyUnits
+  }
+  return (change)
+}
+changeAlgorithm(100000, 22000)
+changeAlgorithm(50000, 150)
+changeAlgorithm(10000, 150000)
+
+```

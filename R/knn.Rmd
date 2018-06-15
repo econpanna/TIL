@@ -1,0 +1,247 @@
+---
+title: "KNN"
+output: html_notebook
+---
+
+``` {r knn}
+rm(list=ls())
+#### KNN ####
+dat <- read.csv('wisc_bc_data.csv', header=T, row.names=1)
+# 위스콘신 유방암 데이터 (Wisonsin Breast Cancer data)
+# 미세바늘로 흡입한(Fine Needle Aspirate, FNA) 세포들을 디지털 이미지화한 후, 
+# 각 이미지를 이미지분석 소프트웨어로 분석한 결과를 예측변수로 사용하여
+# 종양이 악성인지 양성인지를 판별해내는 분류분석 문제
+
+# radius : 반지름
+# texture : 그레이스케일 값의 표준편차
+# perimeter : 둘레
+# area : 면적
+# smoothness : 반지름의 국소적 변화 정도(local variation)
+# compactness : (perimeter^2 / area - 1.0)
+# concavity : 오목한 정도(severity of concave portions of the contour)
+# concave_points : 오목한 점들의 개수(number of concave portions of the contour)
+# symmetry : 대칭도
+# fractal dimension : 프랙탈 차원 (https://en.wikipedia.org/wiki/Coastline_paradox)
+
+# mean : 평균
+# se : 표준편차
+# worst : 극단값
+
+# diagnosis : 진단 / M=악성(malignant), B=양성(benign)
+
+# 각각 요인?에 대해서 세 가지 기술통계치 들어있음. 즉 총 30개 변수
+# 생각해봐야할 것: 반지름이 커지면 둘레, 면적 등도 다 커질 것..
+#                  평균이 크면 극단값도 클 것.. 
+#                  즉, 하나만 쓰던지 합쳐서 한 변수로 만들던지 등의 처리 필요.. 지금은 생략
+
+## 표준화
+head(dat) # View(dat)
+dim(dat)
+
+minmax <- function (x) {
+  z =  (x-min(x))/(max(x)-min(x))  # x안의 각 값들에 다 알아서 적용이...
+  return(z)
+}
+a <- c(1:10)
+minmax(a) # 잘되는지 확인..
+
+# apply: for문 안쓰고 데이터의 여러 열들이나 여러 행들에 한번에 적용하는 법
+# apply(dat[, !names(dat) %in% 'diagnosis'], 2, sum) # 적용 예1
+# apply(dat[, !names(dat) %in% 'diagnosis'], 2, round) # 적용 예2
+normDat <- apply(dat[, !names(dat) %in% 'diagnosis'], 2, minmax) # 1: 행방향 적용, 2: 열방향 적용
+class(normDat) # matrix : 이러면 이름을 불러올 수가 없어서 아래서 에러남?? 는 사실이 아닌듯..로직이 꼬여서 에러났던 듯. 그래도 혹시 모르니 변환하자..
+head(normDat) # View(normDat)
+normDat <- as.data.frame(normDat)
+
+
+#### KNN(plain) ####
+library(class)
+?knn
+# train에 x, cl에 y... 지금까지와 달리 x와 y를 따로 받음
+# traing 데이터를 토대로 test 케이스들에 대한 classification 예측결과를 반환
+
+# train vs test
+set.seed(1234)
+rand_idx <- sample(x=1:nrow(normDat), size=round(0.8*nrow(normDat)), replace=F)
+# 설명변수
+train_x <- normDat[rand_idx, ]
+test_x <- normDat[-rand_idx, ]
+# 종속변수
+train_y <- dat[rand_idx, "diagnosis"]
+test_y <- dat[-rand_idx, "diagnosis"]
+
+# knn 적합
+pred_knn <- knn(train=train_x,
+                test=test_x,
+                cl=train_y, # 맞춰야하는 정답
+                k=21) # K: number of neighbours considered
+#                      지금은 그냥 임의로 21 넣음 : 나랑 가장 가까운 21개의 데이터를 본다
+
+pred_knn
+table(test_y, pred_knn) # 예측력이 굉장히 좋음. 틀린게 3개
+# 로지스틱회귀분석, 의사결정나무에 비해 knn이 예측력이 좋은 편  
+
+
+library(gmodels) 
+# 실제값&예측값 테이블 이쁘게 그리기
+CrossTable(x=test_y, y=pred_knn,
+           prop.chisq=F,
+           prop.c=F,
+           prop.r=F)
+# 이미 예측력이 매우 좋긴하지만 어쩄든 더 좋은  k값을 찾아본다..성능이 아주 많이 좋아지진 않을 것..
+
+# 적절한 k 찾기(cross validation)
+candidate_K <- seq(from=1, to=29, by=2) # 홀수로 한댔으니.. 29는 그냥 정한듯
+errorMat <- matrix(ncol=5, nrow=length(candidate_K)) # 빈 행렬
+foldN <- sample(x=1:5, size=nrow(train_x), replace=T) # 이렇게 일정하지 않은데 왜 sample로????
+for (i in 1:5){ # cross validation을 위해 접은 개수 만큼
+  # cross validation을 통해 k값 찾는 것은 train 데이터만 가지고 하는 것
+  crossTrain_x <- train_x[foldN != i, ] # train 독립변수 데이터 중 train할 k-1묶음의 데이터 
+  crossTest_x <- train_x[foldN == i, ] # train 독립변수 데이터 중 test할 1묶음의 데이터
+  
+  crossTrain_y <- train_y[foldN != i] # train 종속변수 데이터 중 train할 k-1묶음의 데이터 
+  crossTest_y <- train_y[foldN == i]  # test 종속변수 데이터 중 test할 1묶음의 데이터
+  
+  for (j in 1:length(candidate_K)){
+    pred <- knn(train=crossTrain_x,
+                test=crossTest_x,
+                cl=crossTrain_y,
+                k=candidate_K[j])
+    tab <- table(crossTest_y, pred)
+    misclass <- (tab[1,2]+tab[2,1])/sum(tab)
+    errorMat[j,i] <- misclass
+  }
+}
+
+mean_error <- apply(errorMat, 1, mean)
+which.min(mean_error)
+candidate_K # 여기서 which.min(mean_error)에서 나온 index(지금은 5)에 있는 k(지금은 9)를 선택
+candidate_K[which.min(mean_error)]
+
+
+# 위에서 나온 k를 가지고 다시 전체 train 데이터에 적합
+pred_knn2 <- knn(train=train_x,
+                 test=test_x,
+                 cl=train_y,
+                 k=9) # 이제는 9를 넣는 근거가 생김
+table(test_y, pred_knn2)
+# 결과: 오류율이 몹시 낮음. 몹시 예측을 잘함..
+
+#### 내가 다시 해본 것...로직이 이게 더 맞는 것 같음 ####
+candidate_k <- seq(from=1, to=29, by=2)
+fold_n <- 5
+err_mat <- matrix(nrow=length(candidate_k), ncol=fold_n)
+fold_idx <- sample(1:fold_n, size=nrow(train_x), replace=T)
+for (i in 1:length(candidate_k)){
+  for (j in 1:fold_n){
+    cv_train_x <- train_x[fold_idx != j, ]
+    cv_train_y <- train_y[fold_idx != j]
+    cv_test_x <- train_x[fold_idx == j, ]
+    cv_test_y <- train_y[fold_idx == j]
+    
+    pred <- knn(train= cv_train_x, 
+                test= cv_test_x,
+                cl= cv_train_y,
+                k = candidate_k[i])
+    tab <- table(cv_test_y, pred)
+    err_mat[i, j] <- (tab[1,2]+tab[2,1])/sum(tab) # 틀린 개수
+  }
+}
+err_mat
+mean_err <- apply(err_mat, 1, mean) # 행마다(각 k값 마다) 평균
+candidate_k[which.min(mean_err)] 
+#####
+
+
+#### caret 패키지를 이용한 knn ####
+# 참고 예시 http://dataaspirant.com/2017/01/09/knn-implementation-r-using-caret-package/
+rm(list=ls())
+library(caret)
+bc_dat <- read.csv('wisc_bc_data.csv', header=T, row.names=1)
+head(bc_dat) # View(bc_dat)
+summary(bc_dat)
+# 데이터 분할
+train_idx <- createDataPartition(y=bc_dat$diagnosis, p=0.7, list=F) # Train:Test= 7:3
+train_bc <- bc_dat[train_idx,]
+test_bc <- bc_dat[-train_idx,]
+dim(train_bc)/dim(bc_dat) # 분할 확인
+prop.table(table(train_bc$diagnosis)) # train 데이터 종속변수 비율 확인
+prop.table(table(test_bc$diagnosis)) # test 데이터 종속변수 비율 확인
+# cross validation 설정
+tr_ctrl <- trainControl(method='repeatedcv', number=10, repeats=3) # repeatedcv, 10-fold, 3번 반복
+# knn fitting
+knn_caret_fit <- train(diagnosis~., data=train_bc, method='knn',
+                       trControl=tr_ctrl,
+                       preProcess=c('center','scale'), # 아마 표준화를 이 한 줄로?
+                       tuneLength=10) # -_-?
+knn_caret_fit # best k = 11. 11로 fitting 한 결과
+plot(knn_caret_fit) 
+# 성능 평가
+knn_caret_pred <- predict(knn_caret_fit, test_bc)
+confusionMatrix(data=knn_caret_pred, reference=test_bc$diagnosis) 
+# 방향이 지금까지와는 반대이긴 한데..
+# accuracy 97.65%
+# good!
+# 데이터표준화와 k값 설정을 알아서 해주는 듯 
+#####
+
+
+##### KNN 거리 반영한 가중치 부여 library(kknn) ####
+rm(list=ls())
+# install.packages('kknn')
+library(kknn)
+
+dat <- read.csv('wisc_bc_data.csv', header=T, row.names=1)
+rand_idx <- sample(x=1:nrow(dat), size=round(nrow(dat)*0.7), replace=F)
+train_dat <- dat[rand_idx, ]
+test_dat <- dat[-rand_idx, ]
+
+kknn_fit <- kknn(diagnosis~.,
+                 train=train_dat,
+                 test=test_dat,
+                 distance=2, # Minkowski distance.. p가 1이면: 맨하탄거리, 2:유클리디안거리 
+                 kernel='triangular') # default k가 7로 정해져있음 from help
+# scale이 default로 TRUE로 되어있어서 알아서 표준화 해주는듯 
+kknn_pred <- fitted(kknn_fit) # 예측값 받아옴..위에 test_dat을 이미 넣어줘서 가능한듯?
+
+library(gmodels)
+CrossTable(x=test_dat$diagnosis, y=kknn_pred,
+           prop.chisq = T,
+           prop.c=T,
+           prop.r=T,
+           prop.t=T) # 성능이 좋음!
+
+# 성능 이미 좋지만 어쩄든 '거리 반영한 가중치' 줄 때의 적절한 k 찾아보기. function 이용
+LOOCV_kknn <- train.kknn(diagnosis~., train_dat, kmax=29, distance=2, kernel='triangular')
+# help문을 보면 얘는 leave-one-out cross validation을 한다고 함
+# kernel 옵션을 안주면 kernel도 얘가 알아서 cross validation을 통해 골라줌
+LOOCV_kknn # best k 는 6이라고 함..
+kknn_fit2 <- kknn(diagnosis~.,
+                 train=train_dat,
+                 test=test_dat,
+                 k=6,
+                 distance=2, 
+                 kernel='triangular') # kernel에 rectangular를 쓰면 가중치 안준 계산 가능
+kknn_pred2 <- fitted(kknn_fit2)
+CrossTable(x=test_dat$diagnosis, y=kknn_pred2,
+           prop.chisq = T, # 값이 클수록 독립성 검정에서 가설을 기각하는데 더 기여했다는 뜻????
+           prop.c=T,
+           prop.r=T,
+           prop.t=T) # 성능이 거의 동일한듯?
+
+# 거리 반영한 가중치 '안줬을 때' 적절한 k 값
+LOOCV_kknn2 <- train.kknn(diagnosis~., train_dat, kmax=29, distance=2, kernel='rectangular')
+LOOCV_kknn2 # best k 가 7..
+kknn_fit3 <- kknn(diagnosis~.,
+                  train=train_dat,
+                  test=test_dat,
+                  k=7,
+                  distance=2, 
+                  kernel='rectangular') 
+kknn_pred3 <- fitted(kknn_fit3)
+CrossTable(x=test_dat$diagnosis, y=kknn_pred3,
+           prop.chisq = T, # F로 하면 안나오고 T로 하면 나옴..
+           prop.c=T,
+           prop.r=T,
+           prop.t=T) # 성능 비슷한데 더 좋네..
+```

@@ -1,0 +1,79 @@
+---
+title: "기술통계 연습"
+output: html_notebook
+---
+
+``` {r descriptive statistics}
+rm(list=ls())
+### 1월_박스오피스.excel 파일을 이용해, 다음 문제를 풀어보자! 
+
+## 1. 매출액의최대값,최소값,평균
+list.files()
+dat <- read.csv(file = "1월_박스오피스.csv", header=TRUE, fileEncoding = "cp949") 
+# mac에서 데이터 전부 안읽히면 위처럼 cp949 로!!
+# 아래는 파일 인코딩 재설정? 해서 새로 저장한 파일 불러왔던 코드
+# dat <- read.csv(file = "1월_박스오피스_copy.csv", header=TRUE)
+
+View(dat)
+dim(dat)
+str(dat)
+class(dat) # 타입은 데이터프레임!!!
+
+max(dat$매출액) # 매출액의 최대값: 19962547967
+min(dat$매출액) # 매출액의 최소값: 0
+mean(dat$매출액) # 매출액의 평균: 312906971
+
+## 2. 스크린수의평균과분산
+mean(dat$스크린수) # 스크린수의 평균: 42.91954
+var(dat$스크린수) # 스크린수의 분산: 21726.14
+
+## 3. 국적이가장많은나라
+# ...이게 수치면 max값을 구하면 되는데, 글자인데 제일 많이 나온 글자를 구해야하니까 글자별 개수로 먼저 수치화.
+cnt_country = table(dat$대표국적) # 국적...대표국적???
+names(cnt_country)
+names(cnt_country)[3]
+class(cnt_country)
+
+max(cnt_country)  # 120..max값
+names(cnt_country[which.max(cnt_country)]) # 오오.. : 미국
+names(which.max(cnt_country)) # : 미국
+which.max(cnt_country) # 이름: 미국, 인덱스: 8(cnt_country라는 table에서 인덱스)
+# which.max : 그 데이터에서 max값의 인덱스 정보를 반환. max값은 안반환.
+names(cnt_country[cnt_country == max(cnt_country)]) # 오오.. : 미국
+cnt_country[cnt_country == max(cnt_country)] # 미국, 102
+cnt_country == max(cnt_country) # logical 벡터 반환. 각 데이터별 T/F반환
+
+# 풀이
+cnt_country[which.max(cnt_country)] # which - Index를 알려주는 함수 
+# 위 코드가 max값까지 반환하므로 굳이 names를 씌워줄 필요가 없음..
+sort(cnt_country, decreasing=T) # 내림차순 정렬
+sort(cnt_country, decreasing=T)[1]
+
+cnt_country
+names(cnt_country)[cnt_country==max(cnt_country)] # 아하..이렇게 해도 되는 이유는 이미 table로 변환되서 names 개수가 데이터 수와 같구나...
+names(cnt_country[cnt_country==max(cnt_country)])
+names(cnt_country)
+
+View(dat) # 빈칸
+sum(is.na(dat$대표국적)) # 0
+table(dat$대표국적) # 빈칸 국적이 5개
+names(table(dat$대표국적))
+dat$대표국적[dat$대표국적==""] <- NA
+View(dat) # NA
+sum(is.na(dat$대표국적)) # 5
+table(dat$대표국적) # 빈칸 국적이 0개
+
+
+## 4. 한국국적을가진영화의평균상영횟수
+mean(dat$상영횟수[dat$대표국적 == "한국" ]) # : 2306.598. 대표국적 빈칸이 ""면 계산 가능. NA있으면 계산 안됨.
+sum(is.na(dat$상영횟수)) # 0
+mean(dat$상영횟수[dat$대표국적 == "한국" ], na.rm=TRUE)
+summary(dat$상영횟수[dat$대표국적 == "한국" ])
+
+## 5. 미국국적을가진영화의스크린수의summary
+summary(dat$스크린수[dat$대표국적 == "미국"])  # 대표국적 NA도 개수 세어주고 빼고 계산.
+sum(is.na(dat$스크린수)) # 0
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 1.00    1.00    1.00   58.42    3.75  966.00
+
+```

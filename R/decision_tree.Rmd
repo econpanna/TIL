@@ -1,0 +1,302 @@
+---
+title: "Decision tree"
+output: html_notebook
+---
+
+``` {r Decision tree}
+#### Decision Tree ####
+rm(list=ls())
+heart_dat <- read.csv('http://www-bcf.usc.edu/~gareth/ISL/Heart.csv')
+
+head(heart_dat) # View(heart_dat)
+str(heart_dat)
+head(heart_dat)
+row.names(heart_dat) <- heart_dat$X
+heart_dat <- heart_dat[,-1]
+head(heart_dat) # View(heart_dat)
+
+# 데이터 분할 - Train : Test = 7:3
+set.seed(123)
+rand_idx <- sample(1:nrow(heart_dat), size=round(nrow(heart_dat)*0.7), replace = F)
+train_heart_dat <- heart_dat[rand_idx, ]
+test_heart_dat <- heart_dat[-rand_idx, ]
+
+
+# {tree} library
+# install.packages("tree")
+library(tree)
+
+prop.table(table(train_heart_dat$AHD))
+tree_fit <- tree(AHD~., data=train_heart_dat)
+tree_fit
+
+plot(tree_fit)
+# text(tree_fit) # 이렇게 하면 ChestPain 범주가 본래 명칭으로 안나오는듯?
+text(tree_fit, pretty=0) # yes면 왼쪽아래로
+
+# 지금 나무가 큰 편.. 가지치기 해야함
+
+tree_CV <- cv.tree(tree_fit, K=5, FUN=prune.misclass) # K-fold cross validation을 통해 best 깊이를 알아냄
+plot(tree_CV) # y축이 불순도?? 가장 작을 때가 9? 9인지 어떻게 알지?
+tree_CV
+tree_CV$size[which.min(tree_CV$dev)] # 즉, deviation이 가장 작을 때 size(가지깊이인듯?)를 구해서 best에 넣음. 위 plot의 y축이 결국 deviation
+
+tree_prune <- prune.misclass(tree_fit, best=9) # best: 내가 넣고 싶은 가지의 깊이
+# help문에 따르면 number of terminal node... 이걸 가지깊이라고 하는건가?
+plot(tree_prune)
+text(tree_prune, pretty=0)
+
+tree_pred <- predict(tree_prune, test_heart_dat, type="class") # 확률이 아니라 yes or no 의 클래스여야
+
+# 예측력 알아볼 때
+# MSE는 회귀분석 시. y가 연속형일 때(그래야 뺄 수 있음)
+# 로지스틱회귀분석에서는 roc커브. 민감도 특이도로 
+# 여기는..?
+table(tree_pred)
+tree_tab <- table(test_heart_dat$AHD, tree_pred)
+
+tree_acc <- (tree_tab[1,1] + tree_tab[2,2])/sum(tree_tab) # .73
+tree_sen <- tree_tab[2,2]/sum(tree_tab[2,]) # .74
+tree_spe <- tree_tab[1,1]/sum(tree_tab[1,]) # .72
+
+
+
+# {party} library
+# install.packages("party")
+library(party)
+
+party_fit <- ctree(AHD~., data=train_heart_dat)
+plot(party_fit)
+
+party_pred <- predict(party_fit, test_heart_dat) # tree_prune과 달리 얘는 type='class'를 안해도 되네..
+# class(party_fit)
+# class(tree_prune)
+party_tab <- table(test_heart_dat$AHD, party_pred)
+
+party_acc <- (party_tab[1,1]+party_tab[2,2])/sum(party_tab) # .81
+party_sen <- party_tab[2,2]/sum(party_tab[2,]) # .76
+party_spe <- party_tab[1,1]/sum(party_tab[1,]) # .84
+
+# party: 가지치기 필요없음. 알아서 다해줌. 
+#        하기 편하게 이미 다 정해져있기 때문에 세밀하게 데이터 만지고 싶을 때는 안좋을 수 있음
+
+
+# c5.0 패키지
+# 단점은 가지치기가 안됨
+# 장점은 비용함수 수정이 가능
+
+
+
+#### credit ####
+cred_dat <- read.csv('credit.csv')
+head(cred_dat) # View(cred_dat)
+str(cred_dat)
+dim(cred_dat)
+summary(cred_dat)
+
+# 데이터 분할 - Train:Test = 7:3
+rand_idx <- sample(1:nrow(cred_dat), size=round(nrow(cred_dat)*0.7), replace=F)
+train_cred <- cred_dat[rand_idx,]
+test_cred <- cred_dat[-rand_idx,]
+
+## tree ##
+# tree fitting
+library(tree)
+cred_tree_fit <- tree(default~., data=train_cred)
+plot(cred_tree_fit)
+text(cred_tree_fit, pretty=0)
+# 적절한 깊이 찾기
+cred_tree_cv <- cv.tree(cred_tree_fit, FUN=prune.misclass, K=5)
+plot(cred_tree_cv)
+cred_tree_cv # ??
+cred_tree_cv$size[which.min(cred_tree_cv$dev)] # ????9, 11이 나오는데?.. 일단 5로..
+# 가지치기
+cred_tree_prnd <- prune.misclass(cred_tree_fit, best=5)
+plot(cred_tree_prnd)
+text(cred_tree_prnd, pretty=0)
+# 예측력 평가
+cred_tree_pred <- predict(cred_tree_prnd, test_cred, type='class')
+cred_tree_tab <- table(test_cred$default, cred_tree_pred)
+# accuracy
+(cred_tree_tab[1,1]+cred_tree_tab[2,2])/sum(cred_tree_tab) # .70
+# sensitivity
+cred_tree_tab[2,2]/sum(cred_tree_tab[2,]) # .37 -_-???
+# specificity
+cred_tree_tab[1,1]/sum(cred_tree_tab[1,]) # .84 ...
+# -_-?
+
+## party ##
+# 가지치기가 필요없음
+library(party)
+cred_partytree <- ctree(default~., data=train_cred)
+plot(cred_partytree)
+cred_party_pred <- predict(cred_partytree, test_cred)
+cred_party_tab <- table(test_cred$default, cred_party_pred)
+# accuracy
+(cred_party_tab[1,1]+cred_party_tab[2,2])/sum(cred_party_tab) # .71
+# sensitivity
+cred_party_tab[2,2]/sum(cred_party_tab[2,]) # .66
+# specificity
+cred_party_tab[1,1]/sum(cred_party_tab[1,]) # .73
+
+
+## rpart - CART tree algorithm ##
+library(rpart)
+cred_rpart_tr <- rpart(default~., data=train_cred, method='class')
+plot(cred_rpart_tr)
+text(cred_rpart_tr, pretty=0)
+# 여기서부터 #
+printcp(cred_rpart_tr)
+plotcp(cred_rpart_tr) # best = 10
+# 여기까지.. 필요가 있나?-_-? #
+cred_rpart_tr$cptable
+cred_rpart_prnd <- prune(cred_rpart_tr, cred_rpart_tr$cptable[which.min(cred_rpart_tr$cptable[,'xerror']),'CP'])
+plot(cred_rpart_prnd)
+text(cred_rpart_prnd, pretty=0)
+# 예측력 평가
+cred_rpart_prd <- predict(cred_rpart_prnd, test_cred, type='class')
+cred_rpart_tab <- table(test_cred$default, cred_rpart_prd)
+# accuracy
+(cred_rpart_tab[1,1]+cred_rpart_tab[2,2])/sum(cred_rpart_tab) # .69
+# sensitivity
+cred_rpart_tab[2,2]/sum(cred_rpart_tab[2,]) # .31
+# specificity
+cred_rpart_tab[1,1]/sum(cred_rpart_tab[1,]) # .86
+
+
+## C5.0 ##
+# install.packages('C50')
+library(C50)
+# 강사님 markdown 참고
+table(cred_dat$default) # 7:3 
+# 무작위로 뽑았으므로 나와있는대로 무작위로 섞을 필요는 없음
+prop.table(table(train_cred$default))
+prop.table(table(test_cred$default))
+# 둘 다 비율은 약 7:3
+cred_c50_mod <- C5.0(default~., data=train_cred)
+summary(cred_c50_mod)  
+# error항목은 모델의 15.0%.. 700개중 105개 잘못 분류
+# false negative: 82, false positive: 23
+
+# 모델 성능 평가
+cred_c50_prd <- predict(cred_c50_mod, test_cred)
+library(gmodels)
+CrossTable(test_cred$default, cred_c50_prd, 
+           prop.chisq=F, prop.c=F, prop.r=F, dnn=c('actual default','predicted default'))
+# accu: 71%, sensitivity: 약36%, specificity: 약86%
+# no 인 사람을 제대로 골라내는 것이 중요할테니까 괜찮은 모델 아닌가?
+
+# 어쨌든 boosting을 통한 성능 향상.. 그런데 boosting이 정확히..?
+cred_c50_boost10 <-C5.0(default~., data=train_cred, trials=10)
+summary(cred_c50_boost10)
+# error항목이 모델의 5.7%.. 몹시 좋아짐
+
+# 비용 함수도 적용해보기
+# matrix(c(0,4,1,0), nrow=2)
+# err_cost <- matrix(c(0,4,1,0), nrow=2)
+no = c(0, 4)
+yes = c(1, 0)
+err_cost <- rbind(no, yes)
+colnames(err_cost) <- c('no', 'yes')
+cred_c50_cost <- C5.0(default~., data=train_cred, costs=err_cost)
+summary(cred_c50_cost)
+cred_c50_cost_prd <- predict(cred_c50_cost, test_cred)
+CrossTable(test_cred$default, cred_c50_cost_prd, 
+           prop.chisq=F, prop.c=F, prop.r=F, dnn=c('actual default','predicted default'))
+# accu: 64%, sensitivity: 약67%, specificity: 약63%
+# 더 안좋아짐... boosting 만 했을 때 제일 좋은 듯..
+
+
+
+#### credit_dataset_final ####
+credfinal_dat <- read.csv('credit_dataset_final.csv')
+head(credfinal_dat) # View(credfinal_dat)
+# credit.rating: 신용 좋으면 1, 아니면 0
+# 대부분 범주형 변수..한번에 변환하기
+categorical_vars <- c("credit.rating", "account.balance", "previous.credit.payment.status",
+                      "credit.purpose", "savings", "employment.duration", 
+                      "installment.rate", "marital.status", "guarantor", 
+                      "residence.duration", "current.assets", "other.credits", 
+                      "apartment.type", "bank.credits", "occupation", 
+                      "dependents", "telephone", "foreign.worker")
+for (c_var in categorical_vars) {
+  # credfinal_dat[, c_var] <- as.factor(credfinal_dat[, c_var]) # 이렇게 해도 되고
+  credfinal_dat[[c_var]] <- as.factor(credfinal_dat[[c_var]]) # 이렇게 해도 됨
+}
+str(credfinal_dat)
+set.seed(123)
+rand_idx <- sample(1:nrow(credfinal_dat), size=round(nrow(credfinal_dat)*0.7), replace=F)
+train_credf <- credfinal_dat[rand_idx,]
+test_credf <- credfinal_dat[-rand_idx,]
+
+## library(rpart) ##
+library(rpart)
+rpart_fit <- rpart(credit.rating~., data=train_credf)
+plot(rpart_fit)
+text(rpart_fit, pretty=1)
+
+# 사전가지치기
+rpart_fit2 <- rpart(credit.rating~., data=train_credf,
+                    control=rpart.control(minsplit=50))
+# rpart.control 인자 중에..
+# minsplit: node 안의 최소 데이터 개수
+# cp: 불순도? 모델이 너무 복잡해지지 않게 만드는 척도 중 하나
+plot(rpart_fit2)
+text(rpart_fit2, pretty=1)
+
+rpart_fit3 <- rpart(credit.rating~., data=train_credf,
+                    control=rpart.control(cp=0.01)) # 0.05(0.01)보다 크게 만들어라??
+plot(rpart_fit3) # cp=0.05로 만들면 error: 0.05가 너무 커서 나무가 안만들어짐
+text(rpart_fit3, pretty=1)
+
+## library(caret) ##
+# install.packages('caret')
+library(caret) # cross validation을 해주는 function이 있음
+cv_train <- train(credit.rating~., data=train_credf,
+                  method='rpart',
+                  trControl=trainControl(method='cv', # trainControl() help문에 다양한 cross validation옵션들
+                                         number=10, # fold 개수
+                                         repeats=2)) # cross validation 몇번 반복할지..매번 랜덤추출이므로 많이 할수록 안정적일 것
+                                                     # 수업은 이렇게 했는데 warning 뜨는 건 아마 repeats가 cv가 아니라 repeatedcv에서만 쓰이기 때문인듯..
+# install.packages('e1071')
+library(e1071)
+
+# variable selection 
+importance <- varImp(cv_train) # 변수의 중요도 뽑아줌??
+plot(importance) # 위에서부터 중요도 순
+
+# sort(importance$importance[,1], decreasing=T)
+# row.names(importance$importance) # 이 두 줄은 안되서 일단 패스..
+# sort(importance$importance[,1], decreasing=T, index.return=T)$ix[1:5] # 이걸 하려고한걸까?
+imp_vars <- c('account.balance','apartment.type',
+              'previous.credit.payment.status',
+              'credit.duration.months','credit.amount')
+
+# New fittng
+form <- as.formula(paste0('credit.rating~', paste0(imp_vars, collapse='+')))
+# as.formula 로 문자열에서 식으로 변환! 그냥 쓰면 ''가 있는 문자열이므로..
+
+rpart_fit4 <- rpart(form, data=train_credf,
+                    control=rpart.control(minsplit = 50))
+plot(rpart_fit4)
+text(rpart_fit4, pretty=0)
+
+# rpart를 더 이쁘게 그리기!!
+## library(rattle) ##
+
+# install.packages('rattle')
+library(rattle)
+fancyRpartPlot(rpart_fit4, cex=0.8)
+
+# rattle 패키지 에러 참고 
+# 강사님이 알려주신건 다 실패
+# error: GTK version 2.8.0 required   homebrew 로 다운받아야 할 듯!! 구글링!!
+
+# solution!!
+# https://gist.github.com/sebkopf/9405675
+# 해결함..
+
+# caret 패키지 관련 블로그
+# https://lovetoken.github.io/r/2017/04/23/caret_package.html
+
+```

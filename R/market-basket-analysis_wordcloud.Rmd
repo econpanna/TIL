@@ -1,0 +1,160 @@
+---
+title: "Market Basket Analysis & Wordcloud"
+output: html_notebook
+---
+
+``` {r market basket analysis & wordcloud}
+rm(list=ls())
+#### 장바구니 분석 ####
+# install.packages('arules')
+# install.packages('arulesViz')
+# install.packages('wordcloud')
+library(arules)
+library(arulesViz)
+
+# 'groceries.csv' 데이터를 보면 정형화가 안되어 있음.. 각 행 별로 각 구매자가 산 구매 리스트 
+# 정리? 행에는 구매자
+#       열에는 구매한 모든 상품 나열
+#       value에는 1,0으로 해당 상품 구매 여부 표시
+# 이걸 sparse matrix 라고 부름: 0 값이 매우 많아져서 
+# read.transactions 함수가 알아서 만들어줌
+dat <- read.transactions('groceries.csv', sep=',')
+dim(dat) # 사람수(행):9835, 항목(열):169
+dim(dat)[1]*dim(dat)[2] # 총 1662115 칸
+summary(dat)
+# a density of 0.02609146 : 빈칸이 아닌(0이 아닌) 칸 비율이 0.02609146
+dim(dat)[1]*dim(dat)[2]*0.02609146 # 총 42267.01 칸에 값이 있음?
+
+inspect(dat[1:5]) # 데이터 보려면 이렇게 보는데 일단 5개만 봄 - 한사람의 명세서 형태로 나타남
+
+# 도식화 #
+itemFrequencyPlot(dat) # y축은 각각 항목별 지지도 {arules}
+itemFrequencyPlot(dat, support=0.05) # 지지도가 0.05이상인 품목만
+itemFrequencyPlot(dat, topN=20) # top 20 만
+image(dat[1:10]) # 10명까지의 매트릭스를 보여줌
+image(sample(dat, 100)) # 랜덤하게 100명
+
+
+#### world cloud ####
+library(wordcloud)
+ItemName <- itemLabels(dat) # 컬럼명? 다 불러오기
+ItemCount <- itemFrequency(dat) * nrow(dat) # 전체 횟수를 구하기위해 nrow(dat) 곱해줌: 지지도 = 해당상품구매횟수/전체구매횟수
+col <- brewer.pal(8, "Dark2")  # palettes 사용은 구글링!! palettes 패키지 별로 여러가지 색 있음
+
+wordcloud(words=ItemName, # 변수명들
+           freq=ItemCount, # 변수 각각의 개수들
+           min.freq=10,
+           scale=c(3, 0.2), # scale? 어떻게 하는지에 따라 나오고안나오고 하므로 여러가지 시도
+           col=col,
+           random.order=F)  # 글씨체나 cloud 전체 모양 등 다 지정가능
+
+# 발표에서 듣고 해봄..
+# install.packages('wordcloud2')
+library(wordcloud2)
+itemCount <- itemFrequency(dat, type='absolute') # 위와 같은 결과임..
+class(itemCount)
+head(demoFreq) # 예시 인자 형태
+itemCountDf <- data.frame(word=names(itemCount), freq=itemCount, stringsAsFactors = F)
+class(itemCountDf)
+str(itemCountDf)
+wordcloud2(itemCountDf, size=0.6) # size 안줄이면 제일 큰 freq들이 안나옴..
+# 이런저런 테스트 결과 인자로 줄 데이터 프레임의 컬럼명이나 컬럼별 타입은 중요하지 않고 컬럼 순서(word, freq 순서)가 중요.
+
+# # 특정 컬럼 제거하는 법 찾아봄...
+# temp1 <- itemCountDf[,!(colnames(itemCountDf) %in% 'freq')]
+# temp2 <- subset(itemCountDf, select=-freq)
+
+
+
+#### 다시!! ####
+rm(list=ls())
+library(arules)
+library(arulesViz)
+
+dat <- read.transactions('groceries.csv', sep=',')
+summary(dat)
+# element (itemset/transaction) length distribution: item을 해당 개수만큼 산 사람이 몇명인지 보여줌
+
+inspect(dat[1:5])
+itemFrequency(dat[,1:3]) # 아이템 별 지지도
+
+# 도식화
+itemFrequencyPlot(dat, support = 0.05) # support 이 이상만? 최소 support 값
+itemFrequencyPlot(dat, support = 0.01)
+itemFrequencyPlot(dat, topN = 10)
+
+image(dat[1:10])
+image(sample(dat, 100))
+
+
+# world cloud #
+# world cloud: 문자형 데이터를 볼 수 있는 방법 중 하나?
+library(wordcloud)
+ItemName <- itemLabels(dat) # 컬럼명? 다 불러오기
+ItemCount <- itemFrequency(dat) * nrow(dat) # 전체 횟수를 구하기위해 nrow(dat) 곱해줌: 지지도 = 해당상품구매횟수/전체구매횟수
+head(ItemCount)
+col <- brewer.pal(8, "Dark2")  # palettes 사용은 구글링!! palettes 패키지 별로 여러가지 색 있음
+
+wordcloud(words=ItemName, # 변수명들
+          freq=ItemCount, # 변수 각각의 개수들
+          min.freq=10,
+          scale=c(3, 0.2), # scale? 글자 크기인듯?
+          col=col,
+          random.order=F)  # 글씨체나 cloud 전체 모양 등 다 지정가능
+
+
+#### 연관성 분석 ####
+rule <- apriori(dat, parameter=list(support=0.006, # minimum support
+                                    confidence=0.25, # minimum confidence
+                                    minlen=2)) # minimum number of items ..? 2개 이상 사는 경우가 필요하니까
+# class(rule)
+inspect(rule[1:5])
+inspect(sort(rule, by='lift')[1:5]) # lift 값 큰 순으로 top5를 봄 - 여기서 sort는 arules::sort
+
+# 내가 berries 에 관심이 있다면
+berry_rule <- subset(rule, items %in% 'berries') # 결과 4 개 나옴
+inspect(berry_rule[1:4]) # 제일 작은 lift도 1보다 크므로 꽤 큰 양의 연관관계
+
+# 아이템 중 적어도 하나
+berry_yogurt_rule <- subset(rule, items %in% c('berries', 'yogurt')) # berries나 yogurt 둘 중 하나라도
+inspect(berry_yogurt_rule[1:5]) # items 조건이 lhs인지 rhs인지는 상관없는듯 
+
+# 부분일치
+fruit_rule <- subset(rule, items %pin% c('fruit')) # %pin% 문자열에 포함되어 있을때 {arules}
+inspect(fruit_rule[1:5])
+
+# 완벽일치
+berry_yogurt_rule2 <- subset(rule, items %ain% c('berries', 'yogurt')) # 두 개를 정확하게 일치하게 가지고 있어야
+inspect(berry_yogurt_rule2)
+
+highconfidence <- subset(rule, confidence>0.5) # confidence가 0.5 이상인 애들만 
+inspect(highconfidence[1:5])
+
+
+#### 시각화 ####
+plot(rule) # rule들의 값 별로 위치 & 색으로 표시? arulesViz::plot
+plot(fruit_rule)
+plot(berry_yogurt_rule, method='scatterplot') # 기본인듯?
+
+plot(fruit_rule, method='graph') # 화살표 방향으로 lhs, rhs 표시
+plot(berry_yogurt_rule2, method='graph')
+plot(rule, method='graph',
+     control=list(type='items',alpha=1)) # ?? 여기 값 뭘 의미하는지 나중에 알려준다고?
+
+plot(fruit_rule, method='paracoord') # lhs 개수에 따라서 규칙 나타내는 선 시작점이 달라진다고 보면 됨
+# 지금은 보기 어려운데 규칙이 좀 더 적으면 보기 쉬울 것.
+
+plot(rule, method='graph', interactive = T, shading = T) # Xquartz 깔아야 실행 됨ㅜ
+plot(fruit_rule, method='graph', interactive = T, shading = T) 
+plot(berry_rule, method='graph', interactive = T, shading = T) 
+
+#### 저장 ####
+write(rule, file='groceryrules.csv', sep=',', row.names=F) # csv로 저장됨
+
+# 데이터프레임으로 저장
+rule_dataframe <- as(rule, 'data.frame') 
+head(rule_dataframe)
+
+# 구글링 해보면 더 예쁜 rule 시각화 방법들 찾을 수 있음..
+
+```

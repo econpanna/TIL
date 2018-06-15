@@ -1,0 +1,99 @@
+---
+title: "Cross validation"
+output: html_notebook
+---
+
+``` {r CV}
+rm(list=ls())
+
+#### Train & Validation & Test ####
+data(iris)
+set.seed(170919)
+rand_idx <- sample(x=c("Train", "Validation", "Test"),
+                   size=nrow(iris),
+                   prob=c(0.6, 0.2, 0.2), # 대략적인 확률인듯
+                   replace=T) # 복원 추출해야 함
+# sample(rep( rep(c("Train", "Validation", "Test"), c(3,1,1)), len=nrow(iris))) # 이건??
+table(rand_idx)
+prop.table(table(rand_idx)) # 비율로 보기
+
+train_iris <- iris[rand_idx=="Train",]
+valid_iris <- iris[rand_idx=="Validation",]
+test_iris <- iris[rand_idx=="Test",]
+dim(train_iris)
+dim(valid_iris)
+dim(test_iris)
+
+# Train
+lm_fit1 <- lm(Sepal.Length~., data=train_iris)
+lm_fit2 <- lm(Sepal.Length~Sepal.Width, data=train_iris)
+lm_fit3 <- lm(Sepal.Length~Sepal.Width+Petal.Length, data=train_iris)
+
+## validation
+lm_pred1 <- predict(lm_fit1, valid_iris)
+lm_pred2 <- predict(lm_fit2, valid_iris)
+lm_pred3 <- predict(lm_fit3, valid_iris)
+
+# MSE - 예측평가
+mean((lm_pred1 - valid_iris$Sepal.Length)^2) # 0.095
+mean((lm_pred2 - valid_iris$Sepal.Length)^2) # 0.700
+mean((lm_pred3 - valid_iris$Sepal.Length)^2) # 0.108
+# 평가 결과 lm_pred1 이 가장 good
+
+## Test - 최종확인
+lm_final_pred <- predict(lm_fit1, test_iris)
+mean((lm_final_pred - test_iris$Sepal.Length)^2) # 0.083
+# 근데 무슨 의미가 있지? 어차피 validation에서 모델을 결정한다면? test에서는 확인만 하는거 아닌가?
+# 그럼 그냥 train과 test로 나누는 것과 같은 것 아닌가?
+########
+
+
+
+#### 5-Fold Cross Validation ####
+rm(list=ls())
+data(iris)
+
+set.seed(123)
+rand_idx<- sample(x=1:5, size=nrow(iris), replace=T) # 알아서 1~5를 같은 비율, 확률로 뽑아줌
+prop.table(table(rand_idx))
+
+MSE1 <- MSE2 <- MSE3 <- c()
+
+for(i in 1:5){
+# for(i in 1:nrow(iris)){  # LOOCV 일 때
+  
+  # k-fold
+  train_dat <- iris[!rand_idx==i, ]
+  test_dat <- iris[rand_idx==i, ]
+  
+  # Model Fitting 
+  lm_fit1 <- lm(Sepal.Length~., data=train_dat)
+  lm_fit2 <- lm(Sepal.Length~Sepal.Width, data=train_dat)
+  lm_fit3 <- lm(Sepal.Length~Sepal.Width+Petal.Length, data=train_dat)
+  
+  # predict
+  lm_pred1 <- predict(lm_fit1, test_dat)
+  lm_pred2 <- predict(lm_fit2, test_dat)
+  lm_pred3 <- predict(lm_fit3, test_dat)
+  
+  # MSE
+  mse1 <- mean((lm_pred1 - test_dat$Sepal.Length)^2)
+  mse2 <- mean((lm_pred2 - test_dat$Sepal.Length)^2)
+  mse3 <- mean((lm_pred3 - test_dat$Sepal.Length)^2)
+  
+  # All MSE
+  MSE1 <- c(MSE1, mse1)
+  MSE2 <- c(MSE2, mse2)
+  MSE3 <- c(MSE3, mse3)
+  
+}
+mean(MSE1) # 0.096 # 가장 작음
+mean(MSE2) # 0.680
+mean(MSE3) # 0.111
+# cross validation 결과, 첫번쨰 모델이 가장 좋다
+
+# cross validation은 설명력을 보기위한 것이 아님. 에측력을 보기 위한 것
+# 설명력과 예측력은 별개의 것
+########
+
+```

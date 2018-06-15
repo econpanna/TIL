@@ -1,0 +1,62 @@
+---
+title: "Correlation & ANOVA"
+output: html_notebook
+---
+
+``` {r correlation}
+## 상관분석
+# ex 1
+pulseN <- c(69, 68, 70, 71, 73, 71, 74, 69, 70, 73, 69, 70)
+height <- c(172, 165, 175, 168, 173, 174, 177, 170, 168, 170, 171, 173)
+plot(height, pulseN)
+plot(pulseN~height) # 이렇게 해도 되는 듯?
+cor(height, pulseN) # .5264
+cor.test(height, pulseN, alternative="two.sided")
+# 귀무가설 기각 못함. 상관계수는 유의하지 않다.
+
+# ex 2
+View(galton)
+str(galton)
+head(galton)
+plot(galton$child, galton$parent)
+plot(galton$parent ~ galton$child,
+     main = "Galton data",
+     xlab = "Child",
+     ylab = "Parent",
+     pch = 19)
+
+par(mfrow = c(1, 2))
+hist(galton$child, col ="red", breaks = 100)
+hist(galton$parent, col ="skyblue", breaks = 100)
+par(mfrow = c(1, 1))
+cor(galton$child, galton$parent)
+cor.test(galton$child, galton$parent, alternative = "two.sided") 
+# 귀무가설 기각. 상관계수는 유의하다. 
+```
+
+
+``` {r ANOVA}
+## ANOVA
+boxplot(Sepal.Length ~ Species, data = iris, col = 1:length(unique(iris$Species)) )
+fit1 <- aov(Sepal.Length ~ Species, data = iris)
+fit1
+summary(fit1)
+# 세 종류 중 하나 이상 유의미하게 다름
+# 사후검정
+TukeyHSD(fit1)
+# p adj : p 조정값 엄밀히 말하면??
+# 세 그룹 모두 그룹 간 차이가 유의미
+glssDmg <-c(10, 15, 8, 12, 15, 
+            14, 18, 21, 15, 
+            17, 16, 14, 15, 17, 15, 18, 
+            12, 15, 17, 15, 16, 15)
+coatType <- c(rep("A", 5), rep("B", 4), rep("C", 7), rep("D", 6))
+
+boxplot(glssDmg ~ coatType, col = (1:length(unique(glssDmg)))+1 ) # col = 1 이 검은색이어서..
+boxplot(glssDmg ~ coatType, col = unique(glssDmg) ) # col = 1 이 검은색이어서..
+fit2 <- aov(glssDmg ~ coatType)
+summary(fit2)
+# 귀무가설 기각. 각 그룹 간의 마모도 차이 중 하나 이상에 유의미한 차이가 있다
+TukeyHSD(fit2)
+# A와 B간, C와 A간에 유의미한 차이
+```

@@ -1,0 +1,152 @@
+---
+title: "EDA와 시각화 기초"
+output: html_notebook
+---
+
+``` {r EDA prac}
+library(readxl)
+list.files()
+dat <- read_xls("fishcatch_revise.xls", sheet = 2)
+View(dat)
+str(dat)
+dim(dat)
+# 중요한 것: 이상치, 결측치 찾아내고 처리. 범주형 데이터를 어떻게 할 것인가
+
+# Species 와 sex는 범주형 데이터로 보이므로 범주형으로 변환
+dat$Species <- factor(dat$Species)
+dat$sex <- factor(dat$sex)
+str(dat)
+
+summary(dat$Weight) # 이걸보고 최고값이 0이라는 이상치, NA인 결측치를 잦아냄
+summary(dat$Length1) # 결측치 확인
+summary(dat$Length2) # 결측치 확인
+summary(dat$Species) # 범주형이기 때문에 table이 출력
+# 포문으로 한번에 다보기
+for (i in 1:dim(dat)[2]) { # 컬럼수대로 
+  print(summary(dat[ , i]))
+}
+# 사실 포문 필요없음. 한꺼번에 돌리면 다 나옴
+summary(dat) # Weight: 1, Length1: 3, Length2: 1, Length3: 2, sex: 87 결측치 확인
+
+#### Missing 처리 ####
+# 어떻게 처리하는게 더 적절한지 데이터 별로 다름
+# 물고기 데이터는 몸무게를 예측하는게 목적. 결측치 있는 데이터는 제거해야.
+# 1. 제거하기 - Y(반응변수, 종속변수)  
+# weight - 반응변수: NA인 부분을 삭제하기
+is.na(dat$Weight) # NA인지 아닌지를 논리값으로 반환
+dat[is.na(dat$Weight), ] # NA를 가지고 있는 물고기를 가져오기
+dim(dat)    # 159, 9
+dat <- dat[!is.na(dat$Weight), ] # NA를 가지고 있지 않은 물고기를 가져오기
+dim(dat) # 158, 9
+
+dat <- dat[-is.na(dat$Weight), ] # 이렇게 해도 됨
+
+sum(is.na(dat$Weight)) # 이렇게 하면 결측값 개수 확인 가능
+temp <- na.omit(dat$Weight) # na.omit : 결측치 제거
+
+# 평균대체
+# Length1의 결측치를 평균으로 대체
+a <- c(1,2,3)
+a[c(T, F, T)]
+mean(dat$Length1) # 결측치가 하나라도 있으면 NA를 반환
+dat$Length1[is.na(dat$Length1)] <- mean(dat$Length1, na.rm = T)
+dat$Length1
+
+# Length2, Length3 의 결측치를 중위값으로 대체
+dat$Length2[is.na(dat$Length2)] <- median(dat$Length2, na.rm=T)
+dat$Length2
+dat$Length3[is.na(dat$Length3)] <- median(dat$Length3, na.rm=T)
+dat$Length3
+
+
+# mean으로 할지 median으로 할지는..?
+dat<- data.frame(dat)
+class(dat)
+par(mfrow=c(1,3))
+boxplot(dat$Length1)
+boxplot(dat$Length2)
+boxplot(dat$Length3)
+par(mfrow=c(1,1))
+# 이렇게 보면 평균이 보다 데이터를 더 잘 나타내는듯...? 상단에 극단값들이 있는 데이터는 하단에 더 몰렸으므로..?
+
+
+
+
+## plotting
+new_dat <- dat
+
+## 문제1 - 색깔이 있는 물고기 종류별 boxplot 그리기 (p19 참고)
+# boxplot(new_dat$Weight ~ new_dat$Species, new_dat, col = rainbow(length(unique(new_dat$Species))))
+opar <- par(no.readonly = TRUE)
+par(mfrow = c(2, 3))
+# Y츅 ~ X축
+boxplot(new_dat$Weight ~ new_dat$Species, col = palette("default"), main = "Weight")
+boxplot(new_dat$Length1 ~ new_dat$Species, col = palette("default"), main = "Length1")
+boxplot(new_dat$Length2 ~ new_dat$Species, col = palette("default"), main = "Length2")
+boxplot(new_dat$Length3 ~ new_dat$Species, col = palette("default"), main = "Length3")
+boxplot(new_dat$Height ~ new_dat$Species, col = palette("default"), main = "Height")
+boxplot(new_dat$Width ~ new_dat$Species, col = palette("default"), main = "Width")
+par(opar)
+
+boxplot(new_dat$Weight ~ new_dat$Species, col = unique(new_dat$Species), main = "Weight")
+boxplot(new_dat$Length1 ~ new_dat$Species, col = levels(factor(new_dat$Species)), main = "Length1")
+
+## 문제2 - 이쁘게 산점도 그리기(correlation plot) (p22~23 참고)
+# * Hint : 적당한 패키지 찾기(Googling) 
+# p.21
+plot(new_dat[,3:8]) 
+# plot vs pairs
+# pairs(~new_dat$Weight+new_dat$Length1+new_dat$Length2+new_dat$Length3+new_dat$Height+new_dat$Width, data=new_dat)
+# pairs(new_dat[,3:8])
+# pairs(new_dat[,3:8], panel = panel.smooth)
+
+# p.22
+# install.packages("PerformanceAnalytics")
+library(PerformanceAnalytics)
+chart.Correlation(new_dat[,3:8], histogram=TRUE, pch=20) # see 'pch' values
+chart.Correlation(new_dat[,3:8])
+
+# p.23
+# install.packages("corrplot")
+library(corrplot)
+new_dat.cor <- cor(new_dat[,3:8])
+corrplot(new_dat.cor, method = "circle", type = "upper", order = "hclust", tl.col="black", tl.srt=45)
+# method = c("circle", "square", "ellipse", "number", "shade", "color", "pie")
+# +1에 가까울 수록 파랑. -1에 가까울 수록 빨강
+# “AOE” ; Angle of eigenvectors(고유벡터의 각순서)로 정렬
+# “FPC” ; first principal component order(첫번째 주요성분 순서)로 정렬
+# “hclust” ; hierarchical clustering order(계층적 군집순서)로 정렬, 이때 응집 방법은 “hclust.method”로 정하는데 “hclust.method”는 ward, single, complete, average, mcquitty, median, 그리고 centroid 중의 하나이다.
+# "alphabet" ; 알파벳 순서로 정렬
+
+
+#### 풀이 참고
+library(gridExtra) # 화면 분할? 그래프 여러개 띄워주는? 패키지 
+
+# ggplot이 그래프 그림 훨씬 예쁘게 그릴수 있음
+
+# 색은 위처럼 1:7로 개수를 맞춰주면 알아서. 숫자 별로 색이 배정이 되어있음.
+boxplot(new_dat$Weight ~ new_dat$Species, col = 1:7, main = "Weight")
+# 데이터를 명확히 대입해주면 컬럼명만 넣어도 되는듯???
+boxplot(Weight ~ Species, col = 1:7, main = "Weight", data = new_dat)
+# x축, y축 라벨 붙이기
+boxplot(new_dat$Weight ~ new_dat$Species, new_dat, col = 1:7, main = "Weight",
+        xlab = "Species", ylab = "Weight")
+par(mfrow=c(2,3))
+par(mfrow=c(1,1)) # par 풀어줄 때 이렇게 해도 됨. 참고
+# for 문으로 만들기
+opar <- par(no.readonly = TRUE)
+par(mfrow = c(2, 3))
+new_dat <- data.frame(new_dat) # 안되면 이걸 먼저 해야함. new_dat의 클래스가 중복되어서 dataframe으로 확실히 만들어줌
+class(new_dat)
+for (i in 3:8){
+  boxplot(new_dat[ , i]  ~ new_dat$Species, 
+          ylab = colnames(new_dat)[i], xlab = "Species", col = 1:7, 
+          main = paste0(colnames(new_dat)[i], " Box Plot")
+          )
+}
+par(opar)
+
+names(new_dat)
+colnames(new_dat)
+
+```

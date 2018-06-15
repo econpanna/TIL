@@ -1,0 +1,103 @@
+---
+title: "t검정 (t-test)"
+output: html_notebook
+---
+
+``` {r inferential statistics using t-test}
+#### 추론 통계
+## One sample t-test
+coff_dat <- read.csv("coffee1.csv", header = T)
+View(coff_dat)
+str(coff_dat)
+dim(coff_dat)
+
+hist(coff_dat$x)
+
+t.test(coff_dat$x, mu = 340, alternative = "two.sided") # 신뢰구간: 추정 신뢰구간이 mu값을 포함하는지 보기
+t.test(coff_dat$x, mu = 340, alternative = "greater")
+t.test(coff_dat$x, mu = 340, alternative = "less")
+
+## Two sample t-test
+coff_dat2 <- read.csv("coffee2.csv", header = T)
+str(coff_dat2)
+head(coff_dat2)
+tail(coff_dat2)  # 칼로리가 가게 종류에 따라 변할 것. 종속변수(y): 칼로리, 독립변수(x): 가게
+t.test(coffee ~ group, alternative = "two.sided", data = coff_dat2)
+# 해석: 대립가설 채택. 두 그룹의 평균 차이는 0이 아니다.
+2.2e-16 # 2.2*(10의 마이너스 16승)
+as.character(2.2e-4) # 소수점을 뒤 숫자만큼 앞으로 빼면 되는 듯..
+
+t.test(coffee ~ group, mu=14, alternative = "two.sided", data = coff_dat2)
+# H0: X(바)이디야 - X(바)스타벅스 = 14
+# H1: X(바)이디야 - X(바)스타벅스 != 14
+# 기각 못함
+
+## Paired t-test
+bp_dat <- read.csv("bloodpressure.csv", header = T)
+head(bp_dat)
+
+# 1)
+t.test(bp_dat$before, bp_dat$after, paired = T)
+# 
+# 귀무가설 기각 못함.
+# 차이가 없다. 
+
+# 2)
+bp_dat$diff <- bp_dat$before - bp_dat$after
+head(bp_dat)
+
+# 3)
+t.test(bp_dat$diff, alternative = "two.sided")
+# 귀무가설 기각 못함.
+# 차이가 없다.
+
+#### 연습문제
+## Example 1 - One sample t-test
+# R의 내장데이터 mtcars 이용. 모평균의 총마력이 146이라 할 수 있는지 검정
+?mtcars
+t.test(mtcars$hp, mu = 146, alternative = "two.sided")
+
+## Example 2 - Two sample t-test
+str(mtcars)
+t.test(wt ~ am, alternative = "two.sided", data = mtcars)
+t.test(wt ~ am, alternative = "two.sided", paired = F, data = mtcars) # paired = F 가 default
+# 6.272e-06 : 6.272 x 10^-6
+# 즉, 귀무가설 기각. H1 채택. 둘의 차이는 0과 다르다. 유의미하게.
+
+## Example 3 - Paired t-test
+# paired sample t-test??????????????
+A <- c(13.2, 8.2, 10.9, 14.3, 10.7, 6.6, 9.5, 10.8, 8.8, 13.3)
+B <- c(14.0, 8.8, 11.2, 14.2, 11.8, 6.4, 9.8, 11.3, 9.3, 13.6)
+diff_AB <- A-B
+t.test(diff_AB, alternative = "two.sided")
+# 귀무가설 기각. 둘의 재질은 같지 않다. 다르다.
+
+## Example 4
+library(MASS)
+??MASS # 패키지 검색
+head(Cars93)
+t.test(Price ~ Origin, data = Cars93)
+# 기각 못함. 가격의 차이는 없다.
+
+
+
+
+## 당뇨병 치료제 효과 검정
+placeboG <- c(51.4, 52.0, 45.5, 54.5, 52.3, 50.9, 52.7, 50.3, 53.8, 53.1)
+medicineG <- c(50.1, 51.5, 45.9, 53.1, 51.8, 50.3, 52.0, 49.9, 52.5, 53.0)
+t.test(placeboG, medicineG, paired = T) # 귀무가설 기각. 차이가 0과 다르다. 차이가 유의미.
+diff <- placeboG - medicineG
+t.test(diff, mu = 0, alternative = "two.sided")
+
+
+## 패키지 {UsingR}의 cfb 데이터 이용. 나이가 40이상과 40미만인 사람의 연봉 차이가 유의한지 검정
+# install.packages("UsingR")
+library(UsingR)
+View(cfb)
+newAgeG <- ifelse(cfb$AGE >= 40, 1, 2)
+
+t.test(cfb$INCOME ~ newAgeG, alternative = "two.sided", data = cfb) # Y ~ X
+# 귀무가설 기각 못함. 차이가 0과 다르지 않다
+?cfb
+
+```

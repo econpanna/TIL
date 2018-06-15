@@ -1,0 +1,487 @@
+---
+title: "Regression"
+output: html_notebook
+---
+
+``` {r regression}
+## 회귀분석
+mg <- c(3,3,4,5,6,6,7,8,8,9)
+dur <- c(9,5,12,9,14,16,22,18,24,22)
+# 산점도 그리기
+plot(dur ~ mg)
+# 상관분석
+cor(mg, dur)
+cor.test(mg, dur) # alternative: less = 음의 상관관계인지, greater = 양의 상관관계인지... two.sided는 동일
+# 귀무가설을 기각. 대립가설 채택. "모집단의?" 상관관계는 0이 아니다. 유의하다.
+
+fit3 <- lm(dur ~ mg)
+summary(fit3)
+# 인터셉트, x에 대한 회귀계수, p-value 해석
+# H0: 베타 원 = 0. 우리가 알고 싶은 건 기울기. 회귀계수는 0이다.
+# H1: 베타 원 != 0. 베타원이 0이 아니다
+
+# 결과는 yhat = -1.071 + 2.741x 
+# 최소제곱추정법으로 베타제로(y절편), 베타원? 을 알아내는 것?
+# 회귀분석: 이 산점도를 제일 잘 나타내는 직선의 이 식의 직선이다. 를 찾아주는 것 
+# 배터제로 보다 궁금한 것은 베타원. 데이터를 설명.
+# 회귀분석을 통한 데이터 해석: x의 단위가 1증가(1mg 증가)할 때, 복용기간이 평균적으로 2.741 만큼 증가한다. 고 할 수 있음
+
+
+# simple linear regression(단순선형회귀) example
+list.files()
+coffDat <- read.csv("coffee2.csv")
+View(coffDat)
+str(coffDat)
+head(coffDat)
+
+boxplot(coffDat$coffee ~ coffDat$group, col=2:3)
+t.test(coffDat$coffee ~ coffDat$group)
+# 귀무가설 기각. 평균의 차이는 0이 아니다. 차이가 있다.
+
+fit4 <- lm(coffDat$coffee ~ coffDat$group)
+fit4 <- lm(coffee ~ group, data = coffDat)
+summary(fit4)
+# 보면 t값과 p-value는 t-test결과와 동일함. 즉 t-test와 같은 것.
+# 절편(inetercept)에 대한 귀무가설: 절편은 0이다
+# 기울기에 대한 귀무가설: 기울기는 0이다.
+
+
+# # multiple linear regression(다중선형회귀) example 1
+list.files()
+incomeDat <- read.table("reg_ex1.txt", header = T)
+View(incomeDat)
+str(incomeDat)
+head(incomeDat)
+fit5 <- lm(S ~ X+as.factor(E)+as.factor(M), data = incomeDat)
+summary(fit5)
+# simple linear 여러번 돌리면 안되는 이유: 한 요인만 고려함. 다른 요인은 아예 무시.
+# 그러나 multiple linear는 한 요인에 대해서 분석할 때 "다른 요인을 통제"하고 계산.
+# E의 1이 안나오는 이유는 기준으로 잡았기 때문.00으로. 원래 요인개수-1개 변수만 필요
+# yhat = 8035.6 + 546.18x + 3144I_E2 + 2996.21I_E3 + 6883.53I_M1 (정확한 식은 찾아보기!!)
+# 경력년수x가 1만큼 증가할때마다 연봉y이 546 만큼 증가한다. 다른 요인을 모두 통제했을 때.
+# 고졸 보다 대졸이 평균 3144만큼 연봉이 높다. 그이상 학력은 고졸보다 평균 2996만큼 높다.
+# 대졸과 그이상 비교하고 싶으면 3144-2996
+# 관리직에 있는 사람이 없는 사람보다 평균 6882만큼 높다.
+# 분석결과: 각각의 베타들은 유의하다. 
+# 평균구하기: 경력은 10년, 고졸, x = 10, 고졸은 I에 다 0, ??
+# 평균구하기: 경력은 5년, 학부졸, 관리x. => x=5, 1, 0, 0 대입 => 8035.6+ 546.18*5 + 3144*1 + 0 + 0 이 평균연봉
+
+
+
+# 다중 선형 회귀분석 example 2
+# iris 이용. 나머지 변수들의 Petal.Length에 대한 영향
+str(iris)
+plot(iris)
+plot(iris, col=iris$Species) # 종류별로 뭔가 다르네. 회귀식에 종류가 항상 들어가야겠다!
+fitIris <- lm(Petal.Length ~ .-Petal.Length, data = iris)
+summary(fitIris)
+# yhat = -1.11 + 0.61SepalLength - 0.18SepWid + 0.60PetWid + 1.46IspecVers + 1.97IspecVerg
+# 예) setosa가 기본일때 specVers가 setosa보다 1.46더 크다 
+# 결국 식에 대입해서 "종"끼리 그래프를 따로 그리면 y절편에 더해짐. 즉 기울기는 같은데 y절편만 다름. 
+# 그런데 산점도를 보니 기울기가 다른 것 같다면!?
+
+## 교차항 (Interaction term) 추가
+# (범주들끼리 기울기가 다르다면!)
+iris_lmfit2 <- lm(Petal.Length ~. + Sepal.Width*Species, data=iris)
+summary(iris_lmfit2) # 추가된게 교차항
+# yhat = -0.43 + 0.61SepalLength - 0.37SepalWidth - 0.45PetalWidth +
+#        0.14Species(versicolor) + 1.25Species(Virginica) +
+#        0.45SepalWidth*Species(versicolor) + 0.29SepalWidth*Species(virginica)
+# 만약 데이터가 setosa라면
+# Species = setosa
+# yhat = -0.43 + 0.61SepalLength - 0.37SepalWidth - 0.45PetalWidth  (나머지는 다 0)
+
+# Species = versicolor
+# y절편도 바뀌고 SepalWidth 기울기도 바뀜
+# yhat = -0.43 + 0.61SepalLength - 0.37SepalWidth - 0.45PetalWidth 
+#        + 0.14*1 
+#        + 0.45SepalWidth
+#      = (-0.43+0.14) + 0.61SepalLength + (- 0.37 + 0.45)SepalWidth - 0.45PetalWidth 
+# 주로 교차항은 범주형*연속형으로 만듦
+
+# 내 생각: 즉, 교차항을 넣는 것은 Species별로 다른 식을 도출하기 위해서? 특히 교차된 다른 변수(Sepal.Width)에 대한 다른 기울기
+
+
+
+## NBA
+rm(list=ls())
+nbaDat <- read.csv("NBA.csv", header = T, row.names = 1)
+
+# training 과 test 데이터 자르기.. 절대적 기준은 없는데 보통 7:3 or 8:2
+# 데이터가 정렬되어있는데 위에서부터 자르면 샘플 편향이 일어나므로 랜덤을 뽑기
+set.seed(123) # 컴퓨터에 정해진 어떤 123번째 패턴으로 뽑자. 이러면 랜덤 추출이 항상 동일(다른 컴에서도)
+RandomIndex <- sample(x=1:nrow(nbaDat), size=round(nrow(nbaDat)*0.7), replace=F) # nrow: 행의 개수, round: 소수점 원하는 자리수까지
+
+trainNba <- nbaDat[RandomIndex,]
+testNba <- nbaDat[-RandomIndex,]
+
+
+# 전진선택법은 변수가 아무것도 없는데서 시작해야함
+NBA_lmfit <- lm(Spoint~., data=trainNba)
+Null_lmfit <- lm(Spoint~1, data=trainNba) # 아무것도 없이 y절편만 있는 모델
+# abline(Null_lmfit, col="red", lwd=2) # 내가 한번 그려봄..
+
+# 전진선택법
+NBA_forward <- step(Null_lmfit, direction="forward", scope=formula(NBA_lmfit))
+# scope에는 최대치일때. 즉 다 들어있을 때를 넣어주면 됨. formula 타입으로
+# 가장 좋은 애부터 하나씩 넣음
+# 마지막으로 rebound 넣고 끝남?
+
+# 후진제거법
+NBA_backward <- step(NBA_lmfit, direction="backward", scope=formula(Null_lmfit))
+NBA_backward <- step(NBA_lmfit, direction="backward")
+
+# 단계적선택법
+NBA_stepwise <- step(Null_lmfit, direction="both", scope=formula(NBA_lmfit))
+
+# 모델 가정 평가
+par(mfrow=c(2,2))
+plot(NBA_forward)
+par(mfrow=c(1,1))
+# 등고선이 보인다는 것 자체가 위험한 거..
+# 어쩄든 무시할 수도 있고, 빼고 다시 모델을 만들수도 있고..
+
+# 모델 예측 평가
+predForward <- predict(NBA_forward, testNba) # 예측값이 나오는건가?? 실제 Spoint 대신??
+
+# MAE (Mean Absolute Error: 평균 절대 오차)
+MAEForward <- mean(abs(testNba$Spoint - predForward))
+MAEForward # 이게 큰지 작은지는 다른 방법으로 만든 모델들과 비교하면 됨
+
+# MSE (Mean Squared Error : 평균 제곱 오차)
+MSEForward <- mean((testNba$Spoint - predForward)^2)
+MSEForward
+
+plot(predForward~testNba$Spoint)
+abline(a = 0, b = 1, col="red", lwd=3 ) # 70개만 가지고 분석한 결과니까 정보량이 좀 부족할 수도..
+
+
+## Backward, Stepwise 비교
+par(mfrow=c(2,2))
+plot(NBA_backward)
+par(mfrow=c(1,1))
+predBackward <- predict(NBA_backward, testNba)
+MAEBackward <- mean(abs(testNba$Spoint - predBackward))
+MAEBackward
+MSEBackward <- mean((testNba$Spoint-predBackward)^2)
+MSEBackward
+
+par(mfrow=c(2,2))
+plot(NBA_stepwise)
+par(mfrow=c(1,1))
+predStepwise <- predict(NBA_stepwise, testNba)
+MAEStepwise <- mean(abs(testNba$Spoint - predStepwise))
+MAEStepwise
+MSEStepwise <- mean((testNba$Spoint-predStepwise)^2)
+MSEStepwise
+
+
+
+## cpus
+# 데이터 분석할 때 무작정하지 말고 데이터 이름 뜻이라도 찾아보기. cpu에 대해 찾아보기
+# estperf 변수는 쓰지 않기. 우리가 찾는 변수랑 .99 상관관계니까 빼고 하기
+# 로그 취하는 등의 변수 변환? 해볼 것
+
+# 캐시메모리 저장공간이라니까 이게 클수록 perf 도 크겠지 라고 미리 짐작 가능
+rm(list=ls())
+library(MASS)
+# View(cpus)
+head(cpus)
+str(cpus)
+dim(cpus)
+plot(cpus)
+
+row.names(cpus) <- cpus$name
+cpus <- cpus[,-1] # name 제거
+cpus <- cpus[,-ncol(cpus)] # estperf 제거. -ncol(): 마지막 컬럼 제거
+# View(cpus)
+head(cpus)
+plot(cpus) # 점이 한쪽으로 뭉쳐있는건 아웃라이어 때문...
+sort(cpus$perf, decreasing=T)[1:3] # 이 정도 지워볼 것
+cpus_rm <- cpus[!cpus$perf %in% sort(cpus$perf, decreasing=T)[1:3], ]
+plot(cpus_rm) 
+
+hist(cpus_rm$perf, breaks = 100) # 정규분포가 아님. 한쪽으로 쏠림..
+cpus_lmfit <- lm(perf~., data=cpus_rm)
+summary(cpus_lmfit)
+par(mfrow=c(2,2))
+plot(cpus_lmfit) # 정규성이 깨진 것을 볼 수 있음
+par(mfrow=c(1,1))
+# 오른쪽으로 쏠리면 보통 로그 변환을 함
+cpus_lmfit2 <- lm(log(perf)~., data=cpus_rm)
+par(mfrow=c(2,2))
+plot(cpus_lmfit2) # 많이 나아짐... 
+par(mfrow=c(1,1))
+
+cpus_rm$logperf <- log(cpus_rm$perf)
+plot(cpus_rm)
+cpus_lmfit3 <- lm(log(perf)~.-logperf-syct+I(1/syct), data=cpus_rm) # logperf 지우고 syct 지우고 syct 역수 추가. I()로 내가 추가하는 변수 표시
+# 산점도가 선형이 아니라 어떤 함수 형태? 1/x, log(x)등등.. 이면 변형해줘야 하는 듯
+# 내 질문: 데이터 변형이 어떻게 가능?  한 row가 하나의 identity인데 한 칸을 바꾼다는 게
+# 답: 전체 데이터의 그 컬럼을 다 바꾸는 것이므로 괜찮. 우리는 패턴을 보는 것이므로 절대적인 값이 중요한 것이 아님.
+par(mfrow=c(2,2))
+plot(cpus_lmfit3)  # 아직 아웃라이어들이 남아있는데 어떻게할지는 알아서..
+par(mfrow=c(1,1))
+summary(cpus_lmfit3) # 과적합일 수.. 너무 많이 변형하면 해석이 어려워짐..
+# 예) 1/syct 가 1 증가할 때 log(perf)가 1.67?? 증가한다??
+
+plot(cpus_rm)
+cor(cpus_rm)
+cor(cpus_rm$mmin, cpus_rm$mmax) 
+cor(cpus_rm$chmin, cpus_rm$chmax)
+# 다중공선성: 변수들끼리 관계가 너무 깊음 => 둘 중 하나를 빼거나 둘다 반영한? 새로운 변수로 만들어줌
+# 다중공선성을 해결할 수 있는 방법? LASSO, Ridge...
+# 우리가 배운 세 가지 변수선택법으로는 안될 듯. 아마 둘 다 선택해버릴 것..
+str(cpus_rm)
+# cpus_rm$meanmemory <- mean(cpus_rm$mmin, cpus_rm$mmax) # 이거 왜 안되지??다시 볼 것. 안되는 코드 같은데??
+
+
+RandomIndex <- sample(x=1:nrow(cpus_rm), size=round(nrow(cpus_rm)*0.7), replace=F) 
+trainCpu <- cpus_rm[RandomIndex,]
+testCpu <- cpus_rm[-RandomIndex,]
+
+cpuLmfit <- lm(log(perf)~.-logperf-syct+I(1/syct), data=trainCpu)
+cpuNullLmfit <- lm(log(perf)~1, data=trainCpu) 
+
+# 전진선택법
+cpus_forward <- step(cpuNullLmfit, direction="forward", scope=formula(cpuLmfit))
+
+par(mfrow=c(2,2))
+plot(cpus_forward)
+par(mfrow=c(1,1))
+
+predForward <- predict(cpus_forward, testCpu)
+
+MAEForward <- mean(abs(log(testCpu$perf) - predForward))
+MAEForward
+
+
+# 데이터 분석에는 정답이 없다고 생각하면 됨. 처리는 분석가 역량
+# 정규분포 아닐 때 로그를 취하는 등으로 정규분포로 데이터를 변형하는데, 그럼 결과는 더 잘 나와도 해석이 어려워짐
+# 요즘 통계에서 hot issue: 변수가 관측치보다 많아지는 상태. 통계 분석 불가. 이 문제를 푸는 게 문제. 
+# 딥러닝은 변수가 너무 많음..
+
+
+## insurance
+rm(list=ls())
+insu_dat <- read.csv("insurance.csv")
+# View(insu_dat)
+head(insu_dat)
+str(insu_dat)
+head(insu_dat, 3)
+summary(insu_dat)
+plot(insu_dat)
+plot(insu_dat$age, insu_dat$charges)
+plot(insu_dat$bmi, insu_dat$charges)
+plot(insu_dat$charges) # charges가 범주 여야 하나?
+plot(log(insu_dat$charges))
+# children 범주화? 
+hist(insu_dat$charges) # 로그해야 할 듯?
+hist(log(insu_dat$charges))
+
+
+## 풀이
+library(GGally)
+ggpairs(insu_dat)
+summary(insu_dat)
+
+hist(insu_dat$charges)
+head(sort(insu_dat$charges, decreasing=T), 20)
+hist(log10(insu_dat$charges))
+hist(log(insu_dat$charges))
+
+# 데이터 분할
+set.seed(1234)
+rand_idx <- sample(1:nrow(insu_dat), size=round((nrow(insu_dat))*.6), replace = F)
+head(rand_idx)
+
+train_dat <- insu_dat[rand_idx,]
+test_dat <- insu_dat[-rand_idx,]
+
+# Model Fitting
+full_fit <- lm(log10(charges)~., data=train_dat)
+summary(full_fit)
+
+par(mfrow=c(2,2))
+plot(full_fit) # 몹시 좋지 않음...
+par(mfrow=c(1,1))
+# 해석하는 법: 왼쪽 아래위는 독립성과 동분산성 보는 것. 거의 같은 그래프라고 보면 됨 => 추세(빨간선)가 수평점선에 맞고 점들에 패턴이 없어야함
+#              오른쪽 위는 정규성. 점들이 점선에 잘 맞아야함. 끝부분은 좀 벗어나도 되긴함..
+#              오른쪽 아래는 등고선 안나오면 일단 ok. 등고선 나타나면 일단 판단 필요..넘어가면 이상치
+
+# 그러므로 다시 데이터 보기!!
+insu_dat$log_charges <- log(insu_dat$charges)
+plot(log_charges~age, insu_dat, pch=19)
+# 데이터가 그룹이 없는데 그룹 지어진 패턴이라면, 데이터를 잘 설명할 수 있도록 그룹을 묶어줘야 => clustering
+# 데이터를 쪼개서 분석하거나 clustering 기법을 적용해야
+
+
+# Variable Selection 
+null_fit <- lm(log10(charges)~1, data=train_dat )
+
+# forward, backward, stepwise selection
+forward_fit <- step(null_fit, direction="forward", scop=formula(full_fit))
+# 똑같은 결론이 나옴..전체 다 들어간 모델이 좋다
+backward_fit <- step(full_fit, direction="backward")
+stepwise_fit <- step(null_fit, direction="both", scop=formula(full_fit))
+forward_fit$coefficients # 이렇게하면 최종적으로 뽑힌 변수를 알 수 있음
+backward_fit$coefficients 
+stepwise_fit$coefficients 
+# 똑같이 나옴.. 그러므로 다 평가할 필요 없음
+
+# predict
+forward_pred <- predict(forward_fit, test_dat)
+# MAE
+mean(abs(log10(test_dat$charges) - forward_pred))  # 예측값이 log취했으니 실제값도 log취해줌!!
+# MSE
+mean((log10(test_dat$charges) - forward_pred)^2)
+
+
+plot(log10(test_dat$charges) ~ forward_pred)
+# 여전히 두 그룹. 우리가 알지 못하는 어떤 변수들이 숨어있는 것. 이 패턴을 설명할 수 있는 변수가 하나 더 있었으면 model fitting이 더 잘 됐을 것
+
+plot(insu_dat, col=insu_dat$smoker) # 한번 그려봄..
+
+
+
+## ToyotaCorolla
+rm(list=ls())
+tc_dat <- read.csv('ToyotaCorolla.csv')
+# View(tc_dat)
+head(tc_dat)
+str(tc_dat)
+head(tc_dat, 2)
+summary(tc_dat)
+
+row.names(tc_dat) <- tc_dat$Id  # Id를 row name 으로..
+tc_dat <- tc_dat[,-1] # Id 제거
+
+# 범주형 변수 변환
+names(tc_dat)
+factor_names = c('Met_Color', 'Automatic', 'Mfr_Guarantee', 'BOVAG_Guarantee',
+                 'ABS', 'Airbag_1', 'Airbag_2', 'Airco', 'Automatic_airco',
+                 'Boardcomputer', 'CD_Player', 'Central_Lock', 'Powered_Windows',
+                 'Power_Steering', 'Radio', 'Mistlamps', 'Sport_Model',
+                 'Backseat_Divider', 'Metallic_Rim', 'Radio_cassette','Tow_Bar')
+tc_dat[factor_names] <- lapply(tc_dat[factor_names], factor) # factor 타입으로 변환
+str(tc_dat)
+summary(tc_dat)
+
+plot(tc_dat[,2:9]) # 변수가 너무 많아서 쪼개서 봄
+# Price 극단값 제거
+tc_dat_rm <- tc_dat[!tc_dat$Price %in% sort(tc_dat$Price, decreasing=T)[1:3], ]
+plot(tc_dat_rm[,2:9])
+# Price 정규성 확인
+hist(tc_dat_rm$Price)
+tc_lmfit <- lm(Price ~ .-Model, data=tc_dat_rm)
+par(mfrow=c(2,2))
+plot(tc_lmfit)
+par(mfrow=c(1,1))
+
+tc_lmfit2 <- lm(log(Price) ~ .-Model, data=tc_dat_rm)
+par(mfrow=c(2,2))
+plot(tc_lmfit2)
+par(mfrow=c(1,1))
+
+# log(Price)추가
+tc_dat_rm$log_price <- log(tc_dat_rm$Price)
+plot(tc_dat_rm[,c(which(names(tc_dat_rm)=='log_price'), 2:9)])
+# 다중공선성..? 
+cor(tc_dat_rm$Age_08_04, tc_dat_rm$Mfg_Year) # -0.98
+tc_dat_rm <- tc_dat_rm[, !names(tc_dat_rm)=='Mfg_Year'] # Mfg_Year 제거..?
+
+# Mfg_Month 범주화..? 12개..?
+table(tc_dat_rm$Mfg_Month)
+tc_dat_rm$Mfg_Month <- as.factor(tc_dat_rm$Mfg_Month)
+
+# HP 묶어서 범주화
+table(tc_dat_rm$HP)
+plot(tc_dat_rm$HP, tc_dat_rm$log_price)
+tc_dat_rm$newHP <- ifelse(tc_dat_rm$HP <= 80, 'A',
+                        ifelse(tc_dat_rm$HP <= 100, 'B', 'C'))
+tc_dat_rm$newHP <- as.factor(tc_dat_rm$newHP)
+tc_dat_rm <- tc_dat_rm[, !names(tc_dat_rm)=='HP'] # 기존 HP 변수 제거..?
+summary(tc_dat_rm$newHP)
+
+# cc 극단값 제거
+tc_dat_rm <- tc_dat_rm[-which.max(tc_dat_rm$cc),]
+plot(tc_dat_rm$cc, tc_dat_rm$log_price)
+table(tc_dat_rm$cc)
+# cc 묶어서 범주화
+tc_dat_rm$newCC <- ifelse(tc_dat_rm$cc <= 1500, 'A',
+                          ifelse(tc_dat_rm$cc <= 1700, 'B', 'C'))
+tc_dat_rm$newCC <- as.factor(tc_dat_rm$newCC)
+summary(tc_dat_rm$newCC)
+tc_dat_rm <- tc_dat_rm[, !names(tc_dat_rm)=='cc'] # 기존 cc 변수 제거..?
+
+plot(tc_dat_rm[,c(which(names(tc_dat_rm)=='log_price'), 9:20)])
+plot(tc_dat_rm[,c(which(names(tc_dat_rm)=='log_price'), 9:17)])
+
+# Doors, Gears 묶어서 범주화..? 
+table(tc_dat_rm$Doors)
+plot(tc_dat_rm$Doors, tc_dat_rm$log_price)
+table(tc_dat_rm$Gears)
+plot(tc_dat_rm$Gears, tc_dat_rm$log_price)
+tc_dat_rm$newDoors <- ifelse(tc_dat_rm$Doors <= 3, 'A',
+                          ifelse(tc_dat_rm$Doors == 4, 'B', 'C'))
+tc_dat_rm$newDoors <- as.factor(tc_dat_rm$newDoors)
+tc_dat_rm$newGears <- ifelse(tc_dat_rm$Gears <= 5, 'A', 'B')
+tc_dat_rm$newGears <- as.factor(tc_dat_rm$newGears)
+tc_dat_rm <- tc_dat_rm[, !names(tc_dat_rm) %in% c('Doors','Gears')] # 기존 변수 제거..?
+str(tc_dat_rm)
+plot(tc_dat_rm[,c(which(names(tc_dat_rm)=='log_price'), 9:14)])
+
+# Weight 극단값 제거
+tc_dat_rm <- tc_dat_rm[!tc_dat_rm$Weight %in% sort(tc_dat_rm$Weight, decreasing=T)[1:2], ]
+
+# Guarantee_period 묶어서 범주화
+plot(tc_dat_rm$Guarantee_Period, tc_dat_rm$log_price)
+table(tc_dat_rm$Guarantee_Period)
+tc_dat_rm$newGuaranteeP <- ifelse(tc_dat_rm$Guarantee_Period == 3, 'A',
+                                ifelse(tc_dat_rm$Guarantee_Period == 6, 'B', 'C'))
+tc_dat_rm$newGuaranteeP <- as.factor(tc_dat_rm$newGuaranteeP)
+summary(tc_dat_rm$newGuaranteeP)
+tc_dat_rm <- tc_dat_rm[, !names(tc_dat_rm) == 'Guarantee_Period'] # 기존 변수 제거..?
+
+plot(tc_dat_rm[,c(which(names(tc_dat_rm)=='log_price'), 32:36)])
+# View(tc_dat_rm)
+head(tc_dat_rm)
+summary(tc_dat_rm)
+str(tc_dat_rm)
+
+
+# 데이터 분할(7:3)
+rand_idx <- sample(x=1:nrow(tc_dat_rm), size=round(nrow(tc_dat_rm)*0.7), replace=F) 
+
+train_tc <- tc_dat_rm[rand_idx,]
+test_tc <- tc_dat_rm[-rand_idx,]
+
+
+# 변수 선택
+# 전진선택법
+tc_lmfit <- lm(log(Price)~.-Model-log_price, data=train_tc) # Model 제거..?
+null_tc_lmfit <- lm(log(Price)~1, data=train_tc)
+tc_forward_fit <- step(null_tc_lmfit, direction='forward', scope=formula(tc_lmfit)) 
+# 후진제거법
+tc_backward_fit <- step(tc_lmfit, direction='backward')
+# 단계적선택법
+tc_stepwise_fit <- step(null_tc_lmfit, direction='both', scope=formula(tc_lmfit))
+
+tc_forward_fit$coefficients
+tc_backward_fit$coefficients
+tc_stepwise_fit$coefficients
+# 변수선택법 3가지 결과 모두 동일..? 변수이름만 같으면..?
+
+# 모델 가정 평가 - 전진선택법
+par(mfrow=c(2,2))
+plot(tc_forward_fit)
+par(mfrow=c(1,1))
+# 모델 예측 평가 - 전진선택법
+pred_forward <- predict(tc_forward_fit, test_tc)
+MAEForward <- mean(abs(log(test_tc$Price) - pred_forward)) # 0.081
+MSEForward <- mean((log(test_tc$Price) - pred_forward)^2)  # 0.011
+
+plot(log(test_tc$Price) ~ pred_forward)
+abline(0, 1, col='red', lwd=2)
+
+```

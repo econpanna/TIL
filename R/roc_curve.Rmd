@@ -1,0 +1,106 @@
+---
+title: "ROC curve"
+output: html_notebook
+---
+
+``` {r ROC curve}
+rm(list=ls())
+
+# ROC curve (Receiver Operating Characteristic curve)
+
+#### 패키지를 쓰지 않고! ROC 커브를 그리기 ####
+# 포문 사용해서 cutoff 가 0부터 1까지 99칸으로 잘라서 증가할때 각각의 민감도, 특이도를 구하면
+ucla_dat<- read.csv("https://stats.idre.ucla.edu/stat/data/binary.csv")
+
+# 데이터 분할
+rand_idx <- sample(1:nrow(ucla_dat), size=round(nrow(ucla_dat)*0.7), replace=F)
+train_ucla_dat <- ucla_dat[rand_idx, ]
+test_ucla_dat <- ucla_dat[-rand_idx, ]
+
+# 로지스틱 회귀분석 적합
+ucla_glm_fit <- glm(admit~., family=binomial, data=train_ucla_dat)
+summary(ucla_glm_fit)
+
+# 예측
+ucla_glm_pred <- predict(ucla_glm_fit, test_ucla_dat, type="response")
+ucla_glm_pred # 각 학생들의 입학 확률
+
+# ROC 커브 그리기
+cutoff <- seq(from=0, to=1, length.out=99)
+# 1) for(i in cutoff)
+plot(x = 0, y = 0, xlim = c(0, 1), ylim = c(0, 1)) 
+abline(a=0, b=1, col="red", lwd=2)
+for (cutoff_i in cutoff){
+  cutoff_result <- ifelse(ucla_glm_pred > cutoff_i, 1, 0) 
+  cutoff_result <- factor(cutoff_result, levels=c(0, 1)) # factor 타입 변환
+  pred_table <- table(test_ucla_dat$admit, cutoff_result)
+  roc_X <- 1- (pred_table[1,1]/sum(pred_table[1,])) # 1-특이도
+  roc_Y <- pred_table[2,2]/sum(pred_table[2,]) # 민감도
+  points(roc_X, roc_Y)
+}
+# 2) for(i in 1:length(cutoff))
+roc_X <- c()
+roc_Y <- c()
+for (i in 1:length(cutoff)){
+  cutoff_result <- ifelse(ucla_glm_pred > cutoff[i], 1, 0) 
+  cutoff_result <- factor(cutoff_result, levels=c(0, 1)) # factor 타입 변환
+  pred_table <- table(test_ucla_dat$admit, cutoff_result)
+  roc_X[i] <- 1- (pred_table[1,1]/sum(pred_table[1,])) # 1-특이도
+  roc_Y[i] <- pred_table[2,2]/sum(pred_table[2,]) # 민감도
+}
+plot(roc_X, roc_Y, type="l")
+abline(a=0, b=1, col="red", lwd=2)
+
+
+
+#### 풀이 ####
+cutoff <- seq(from=0, to=1, length.out = 101)
+head(cutoff)
+
+accuracy <- sensitivity <- specificity <- c() # 한번에!
+# accuracy <- c()
+# sensitivity <- c()
+# specificity <- c()
+
+for(i in 1:length(cutoff)){
+  pred <- ifelse(ucla_glm_pred > cutoff[i], 1, 0)
+  pred_tab <- table(test_ucla_dat$admit, pred)
+  
+  if (sum(pred %in% 1) == length(pred)){
+    acc <- sum(test_ucla_dat$admit)/length(test_ucla_dat$admit)
+    sen <- 1
+    spe <- 0
+  } else if (sum(pred %in% 0) == length(pred)) {
+    acc <- 1- (sum(test_ucla_dat$admit)/length(test_ucla_dat$admit))
+    sen <- 0
+    spe <- 1
+  } else {
+    acc <- (pred_tab[1,1] + pred_tab[2,2])/sum(pred_tab)
+    sen <- pred_tab[2,2]/sum(pred_tab[2,]) 
+    spe <- pred_tab[1,1]/sum(pred_tab[1,])
+  }
+  accuracy <- c(accuracy, acc)
+  sensitivity <- c(sensitivity, sen)
+  specificity <- c(specificity, spe)
+}
+
+ROCdat <- data.frame(Y = sensitivity,
+                     X = 1-specificity)
+head(ROCdat, 20)
+
+plot(Y~X, data=ROCdat,
+     type="l",
+     main="ROC Curve",
+     xlab="1-specificity",
+     ylab="sensitivity",
+     lwd=2)
+abline(a=0, b=1, lwd=2)
+
+
+#### Packages ####
+# install.packages("Epi")
+library(Epi)
+ROC(form=admit~., data=train_ucla_dat)
+ROC(ucla_glm_pred, test_ucla_dat$admit)
+
+```

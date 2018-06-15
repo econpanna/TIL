@@ -1,0 +1,299 @@
+---
+title: "web scraping"
+output: html_notebook
+---
+
+``` {r scraping}
+rm(list=ls())
+# install.packages('httr')
+
+library(tidyverse)
+library(rvest) # 웹크롤링, xml 파일 불러올 때 유용..
+library(httr)
+library(stringr)
+
+# 다음 뉴스
+news_url <- 'http://v.media.daum.net/v/20170915171203952' # 원하는 뉴스 기사
+
+# 문서 읽기
+news_doc <- news_url %>% 
+  read_html() # html 소스 알아서 해석해옴
+
+# 문서 공급자
+# 웹페이지 검사 열고 소스에서 우클릭->copy->selector 하면 아래와 같이 복사해옴
+# 좌측 상단의 매일경제 이미지 소스
+#cSub > div.head_view > em > a > img
+dist <- news_doc %>% 
+  html_nodes('#cSub > div.head_view > em > a > img') %>% 
+  html_attr('alt')
+# html_attr('class') # 클래스명 가져옴
+# html_attr('src') # 소스링크 가져옴
+
+# # 이렇게 해도 같은 코드
+# news_doc %>% 
+#   html_nodes('#cSub > div.head_view > em > a') %>%
+#   html_nodes('img') %>% 
+#   html_attr('alt')
+
+
+# 문서 내용
+#harmonyContainer > section
+content <- news_doc %>% 
+  html_nodes('#harmonyContainer > section') %>% 
+  html_text() %>% 
+  str_replace_all('\\s+', ' ') # gsub와 유사한 stringr의 함수 - 역슬래시와 글자가 나란히 한개이상 있으면 공백으로 바꾸기
+# 정규표현식 참고 페이지
+# http://blog.eairship.kr/category/%ED%94%84%EB%A1%9C%EA%B7%B8%EB%9E%98%EB%B0%8D%20%EA%B4%80%EB%A0%A8/%EC%A0%95%EA%B7%9C%20%ED%91%9C%ED%98%84%EC%8B%9D
+
+# 제목
+title <- news_doc %>% 
+  html_node('#cSub > div.head_view > h3') %>% 
+  html_text()
+
+
+
+##### 태그 긁어오기
+# 기사 하단에 '애플' 태그 소스 copy selector로 가져옴..
+#mArticle > div.foot_view > div.relate_tag.hc_news_pc_mArticle_relatedTags > span:nth-child(3) > a > span:nth-child(2)
+news_doc %>% 
+  html_nodes('#mArticle > div.foot_view > div.relate_tag.hc_news_pc_mArticle_relatedTags > span:nth-child(2) > a > span:nth-child(2)')
+# 관련 태그는 불가하다.
+# 소스보기에서 볼 수 없기 때문 - 검사에는 나오는데 페이지소스보기(command+alt+u)로 보면 없음
+# 검사에서 Network에서 clear->새로고침 노가다로 찾아야 함. 
+# 적당히 후보를 좁혀가면서
+# status는 200인 것으로: 잘 받아왔다는 뜻
+# 일반적으로 따로 받아오니까 time이 긴것으로??
+# json, xml 이 어떤 데이터를 받아왔을 확률이 큼
+
+
+##### 이건 크롬에서 봅시다.
+# 일일이 찾다가 맞는 json 찾음
+# 더블클릭해서 열어서 주소복사
+# 해당 json 주소 받아오면 : http://cc.media.daum.net/contentsview/more.json?contentsId=20170915171203952&service=news&callback=newsCallback1
+library(jsonlite)
+tag_url <- 'http://cc.media.daum.net/contentsview/more.json?contentsId=20170915171203952&service=news&callback=newsCallback1'
+
+# JSON 다루기
+# fromJSON(tag_url) # error 발생
+# 완전한 JSON이 아님  - 전체를 감싸는 소괄호를 지워야 함???
+
+# 고치기
+tag_raw <- readLines(tag_url)
+# tag_raw <- readLines(tag_url, encoding='utf-8') # 윈도우 등에서 깨지면 이 코드..
+tag_raw <- tag_raw %>% 
+  # str_replace('^/\\*\\*/newsCallback1\\(', '') %>%   # 앞에 /**/ 까지 지우도록 한 코드. 주석이므로 안지워도 상관없음
+  str_replace('newsCallback1\\(', '') %>%   
+  str_replace('\\);$', '')  # ); 로 끝나는 것($ 붙여줌)을 지워라... cf) 시작은 ^로 표시
+  # 특수문자 앞에 역슬래시 두개 붙여줘야하는 듯. 그냥 슬래시는 그냥 인식하는 듯?
+
+tag_list <- fromJSON(tag_raw) # 이제 에러 안남. list로 저장됨
+
+tag_list$cluster # %>% class # 리스트
+tag_list$cluster$title  # %>% class # character
+tag_list$popularKeyword # %>% class # 데이터프레임 
+
+
+# 다시 기사 페이지로 돌아가서..
+# 뉴스 작성자
+#cSub > div.head_view > span > span:nth-child(1)
+writer <- news_doc %>% 
+  html_nodes('#cSub > div.head_view > span > span:nth-child(1)') %>% 
+  html_text()
+
+time <- news_doc %>% 
+  html_nodes('#cSub > div.head_view > span > span:nth-child(2)') %>% 
+  html_text()
+
+news_doc %>% 
+  html_nodes('#cSub > div.head_view > span') %>%  # 이렇게 하면 한번에 가져올 수
+  html_text()
+
+# 위 내용을 function으로 만들기
+# 다른 기사를 클릭해보면 뒤에 숫자만 바뀌는 것을 알 수 있음
+url_number = '20170915171203952'
+
+scrape_news <- function(url_number){
+  # 문서 주소
+  news_url <- paste0('http://v.media.daum.net/v/', url_number)
+  
+  # 문서 읽기
+  news_doc <- news_url %>% 
+    read_html() # html 소스 알아서 해석해옴
+  
+  # 문서 공급자
+  dist <- news_doc %>% 
+    html_nodes('#cSub > div.head_view > em > a > img') %>% 
+    html_attr('alt')
+  
+  # 문서 내용
+  content <- news_doc %>% 
+    html_nodes('#harmonyContainer > section') %>% 
+    html_text() %>% 
+    str_replace_all('\\s+', ' ') # gsub와 유사한 stringr의 함수
+  # 정규표현식 참고 페이지
+  # http://blog.eairship.kr/category/%ED%94%84%EB%A1%9C%EA%B7%B8%EB%9E%98%EB%B0%8D%20%EA%B4%80%EB%A0%A8/%EC%A0%95%EA%B7%9C%20%ED%91%9C%ED%98%84%EC%8B%9D
+  
+  # 제목
+  title <- news_doc %>% 
+    html_node('#cSub > div.head_view > h3') %>% 
+    html_text()
+  
+  # 여긴 function에는 일단 빼고
+  # ##### 태그 긁어오기
+  # news_doc %>% 
+  #   html_nodes('#mArticle > div.foot_view > div.relate_tag.hc_news_pc_mArticle_relatedTags > span:nth-child(2) > a > span:nth-child(2)')
+  # # 관련 태그는 불가하다.
+  # # 소스보기에서 볼 수 없기 때문
+  # 
+  # ##### 이건 크롬에서 봅시다.
+  # library(jsonlite)
+  # tag_url <- 'http://cc.media.daum.net/contentsview/more.json?contentsId=20170915171203952&service=news&callback=newsCallback1'
+  # 
+  # # JSON 다루기
+  # fromJSON(tag_url) # error 발생
+  # # 완전한 JSON이 아님
+  # 
+  # # 고치기
+  # tag_raw <- readLines(tag_url)
+  # # tag_raw <- readLines(tag_url, encoding='utf-8') # 윈도우 등에서 깨지면
+  # tag_raw <- tag_raw %>% 
+  #   # str_replace('^/\\*\\*/newsCallback1\\(', '') %>%   # 앞에 주석 표시까지 지우도록 한 코드
+  #   str_replace('newsCallback1\\(', '') %>%   
+  #   str_replace('\\);$', '')
+  # 
+  # tag_list <- fromJSON(tag_raw) 
+  # 
+  # tag_list$cluster 
+  # tag_list$cluster$title
+  # tag_list$popularKeyword 
+  
+  
+  # 뉴스 작성자
+  writer <- news_doc %>% 
+    html_nodes('#cSub > div.head_view > span > span:nth-child(1)') %>% 
+    html_text()
+  
+  time <- news_doc %>% 
+    html_nodes('#cSub > div.head_view > span > span:nth-child(2)') %>% 
+    html_text()
+  
+  result <- data.frame(title, content, writer, time)
+  
+  return (result)
+}
+
+scrape_news('20170920113104786')
+scrape_news('20170920113104786') %>%  View
+
+
+##### 댓글 긁어오기
+news_doc %>% 
+  html_nodes('#comment173217911 > div > p')
+# 마찬가지로 나오지 않음
+# 페이지 소스 보기로 안나옴
+# network 보기 -> 댓글 새로고침
+
+##### http -> https로 바꾸면 안되던게 잘 될 수도! 나는 일단 mac이어서인지 안바꿔도 됨
+comments_url <- 'http://comment.daum.net/apis/v1/posts/24835172/comments?parentId=0&offset=0&limit=3&sort=CHRONOLOGICAL'
+# comments_url <- 'https://comment.daum.net/apis/v1/posts/24835172/comments?parentId=0&offset=0&limit=4&sort=CHRONOLOGICAL'
+comment_df <- comments_url %>% 
+  fromJSON()
+
+comment_df$content # 댓글 내용들..
+
+
+
+
+
+##### 멜론 윤종신 노래 목록 가져오기
+
+melon_yjs <- 'http://www.melon.com/artist/songPaging.htm?startIndex=1&pageSize=50&listType=0&orderBy=ISSUE_DATE&artistId=437'
+# 본래 http://www.melon.com/artist/song.htm?artistId=437
+# 여기지만 실제로 데이터를 가져오기 위해서는 위 페이지를 이용해야함
+# 페이지를 넘겨보면 페이지소스보기에 곡명이 안찍힘..역시 network에서 봐야함
+
+# 일반적으로 URL에서 "?" 뒤의 문자들은 query임
+# 요청에 따라 DB에서 정보를 가져와 HTML로 뿌려주는 것
+# "&"로 query의 요청인자 구분하며 "="으로 인자를 할당
+
+# 요청 인자를 쉽게 고쳐주는 함수
+melon_url <- modify_url(melon_yjs, 
+                        query=list('startIndex' = 1)) # 이렇게 바꾸면 전체 url에 바뀐 값으로 적용
+
+# 단순히 url을 이용하여 read_html()함수를 사용하면 에러 발생
+melon_doc <- melon_url %>% 
+              read_html()
+# 위에 코드가 되면 여기는 필요없음
+# # 이유는 자세히 모르지만 다음과 같이 실행하면 읽을 수 있음 or 애초에 url을 https로 해봐도..
+# melon_doc <- melon_url %>% 
+#   readLines() %>% 
+#   paste(collapse='') %>% 
+#   read_html() # 불완전한 마지막행 오류는 무시
+
+# 참고
+paste0(c('abc','bcd','efg'),1:3)
+paste0(c('abc','bcd','efg'),collapse='  ')
+paste0(c('abc','bcd','efg'),collapse='')
+
+# Table을 통째로 가져오기
+melon_table <- melon_doc %>% 
+  html_table() %>%  # <table>...</table>를 Data Frame으로 가져오는 함수 - 즉, html 테이블 태그 내용은 가져오기 쉽다.
+  .[[1]] # 그냥 이렇게 가져오면 table이 담긴다고?
+
+# 1:5 %>% .[3] # pipe operator 뒤의 "."(즉, " %>% . ")은 인덱스를 조회하기 위해 사용
+# iris %>% .$Sepal.Length # Sepal.Length 열 가져오기
+melon_table %>% class
+
+# 데이터 확인
+melon_table %>%
+  View()
+# 보면 제목만 가져오려면 데이터 전처리가 필요해 보임
+# 전처리를 하거나, 아래와 같은 방법도 있음
+
+# html 태그를 이용해서..
+# 곡명만 가져오기
+# melon_doc %>%
+#   html_nodes('#frm > div > table > tbody > tr > td:nth-child(3) > div > div > a.btn.btn_icon_detail > span') %>%
+#   html_text()
+melon_doc %>% 
+  html_nodes('#frm > div > table > tbody > tr:nth-child(1) > td:nth-child(3) > div > div > a.fc_gray') %>% 
+  html_text() 
+
+melon_doc %>% 
+  html_nodes('#frm > div > table > tbody > tr > td:nth-child(3) > div > div > a.fc_gray') %>% 
+  html_text()   # 이러면 모든 tr => 제목 목록 전부다 가져옴. td:nth-child(3)는 제목이 있는 칸 위치 정도..
+
+
+yjs_title <- function (page_number) {
+  start_index <- (page_number-1)*50 + 1 # url을 분석한 결과 리스트 시작하는 곡 인덱스인듯. 50개씩 보여주니까(pageSize인듯?) 이런 식 만듦
+  melon_yjs <- 'http://www.melon.com/artist/songPaging.htm?startIndex=1&pageSize=50&listType=0&orderBy=ISSUE_DATE&artistId=437'
+  # 요청 인자를 쉽게 고쳐주는 함수
+  melon_url <- modify_url(melon_yjs, 
+                          query=list('startIndex' = start_index))
+  
+  # 이유는 자세히 모르지만 다음과 같이 실행하면 읽을 수 있음
+  suppressWarnings({
+    melon_doc <- melon_url %>% 
+    readLines() %>% 
+    paste(collapse='') %>% 
+    read_html() # 불완전한 마지막행 오류는 무시
+  }) # suppressWarnings는 경고 메시지가 나와도 출력하지 않게 함
+  
+  # 곡명만 가져오기
+  title <- melon_doc %>% 
+    html_nodes('#frm > div > table > tbody > tr > td:nth-child(3) > div > div > a.btn.btn_icon_detail > span') %>% 
+    html_text()
+  
+  return(title)
+}
+
+
+yjs_title(2) # 2 페이지의 곡 목록을 받아온다
+
+titles <- NULL
+for (i in 1:10){
+  titles <- c(titles, yjs_title((i)))
+} # 1부터 10페이지까지 곡 리스트를 받아옴
+titles 
+
+```

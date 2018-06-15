@@ -1,0 +1,212 @@
+---
+title: "Logistic regression"
+output: html_notebook
+---
+
+``` {r logistic regression}
+rm(list=ls())
+cdDat<- read.table("CDdata.txt", header = T)
+# View(cdDat)
+head(cdDat)
+str(cdDat)
+plot(CD~Age, 
+     data=cdDat, 
+     main="Cancer Diagnosis with Linear Regression",
+     xlab = "AGE", ylab="CD", pch= 19)
+lmfit2 <- lm(CD~Age, data=cdDat)
+summary(lmfit2)
+abline(lmfit2, col="red", lwd=3)
+# 이런 이분형(0 or 1) 데이터에 대해서는 선형 회귀분석이 부적합!!
+
+
+# Logistic regression
+glmfit <- glm(CD~Age, family=binomial, data=cdDat) # binomial : 이항분포. 값이 두개인
+# glmfit <- glm(CD~Age, family=gaussian, data=cdDat) # gaussian: 정규분포. 기존 회귀분석과 같음
+summary(glmfit)
+# log(Odds식..) = -6.71+0.13Age
+# 해석: 나이가 1증가함에 따라 logit이 평균적으로 0.13 증가한다.
+
+exp(0.132) # 계산해봄..
+
+
+rm(list=ls())
+list.files()
+cancerDat <- read.csv("ProstateCancer.csv")
+# View(cancerDat) 
+head(cancerDat)
+str(cancerDat)
+cancerDat$Xray <- as.factor(cancerDat$Xray)
+cancerDat$Size <- as.factor(cancerDat$Size)
+cancerDat$State <- as.factor(cancerDat$State)
+cancerDat$Y <- as.factor(cancerDat$Y)
+glmfit2 <- glm(Y~., family=binomial, data=cancerDat) 
+summary(glmfit2)
+# R-square 같은 값 없음. 정규성이 깨진 데이터에 대한 설명력을 나타내는 변수는 아직 없음. 확인불가
+# 그래서 plot 검정 잘안함
+
+# R-square가 정확히..?
+
+
+## ucla
+rm(list=ls())
+ucla_dat<- read.csv("https://stats.idre.ucla.edu/stat/data/binary.csv") # 이렇게 url을 써서 데이터 가져올 수 있음! 이 url에 데이터가 있을 때!
+
+# EDA 와 변수선택은 일단 생략
+
+#데이터 분할
+set.seed(20170914)
+rand_idx <- sample(1:nrow(ucla_dat), size=round(nrow(ucla_dat)*0.7), replace=F)
+train_ucla_dat <- ucla_dat[rand_idx, ]
+test_ucla_dat <- ucla_dat[-rand_idx, ]
+
+# 로지스틱 회귀분석 적합
+glm_fit <- glm(admit~., family=binomial, data=train_ucla_dat)
+summary(glm_fit)
+
+# 예측
+glm_pred <- predict(glm_fit, test_ucla_dat, type="response") # type="response" 를 쓰지 않으면 회귀분석과 같아짐. 어떤 뜻이라고???
+glm_pred
+
+# 예측력 평가
+table(test_ucla_dat$admit)
+cutoff0.5 <- ifelse(glm_pred > 0.5, 1, 0)
+glm_pred
+cutoff0.5
+
+pred_table <- table(test_ucla_dat$admit, cutoff0.5)
+pred_table
+
+# accuracy(정확도)
+(pred_table[1,1]+pred_table[2,2])/sum(pred_table) # 약 70%
+# sensitivity(민감도): 실제 1인데 예측도 1로 한 비율
+pred_table[2,2]/sum(pred_table[2,]) # 약 21%
+# specificity(특이도): 실제 0인데 예측도 0으로 한 비율 
+pred_table[1,1]/sum(pred_table[1,]) # 약 91%
+
+
+
+## crab_data
+rm(list=ls())
+crab_dat <- read.table('crab_data.txt', header=T)
+# View(crab_dat)
+head(crab_dat)
+dim(crab_dat)
+str(crab_dat)
+summary(crab_dat)
+
+plot(crab_dat, col=crab_dat$y+1)
+crab_dat[c('color', 'spine', 'y')] <- lapply(crab_dat[c('color', 'spine', 'y')], factor) # factor 변환
+
+crab_dat_rm <- crab_dat[-which.max(crab_dat$weight),] # weight 극단값 제거
+plot(crab_dat_rm, col=crab_dat_rm$y)
+
+# 데이터 분할 
+rand_idx <- sample(1:nrow(crab_dat_rm), size=round(nrow(crab_dat_rm)*0.7),replace=F)
+train_crab <- crab_dat_rm[rand_idx,]
+test_crab <- crab_dat_rm[-rand_idx,]
+
+# 변수선택
+crab_full_fit <- glm(y~.-satell, family=binomial, data=train_crab) # satell은 예측변수가 아니지..?
+crab_null_fit <- glm(y~1, family=binomial, data=train_crab)
+# 전진선택법
+crab_for_fit <- step(crab_null_fit, direction='forward',scope=formula(crab_full_fit))
+# 후진제거법
+crab_back_fit <- step(crab_full_fit, direction='backward')
+# 단계적선택법
+crab_step_fit <- step(crab_null_fit, direction='both',scope=formula(crab_full_fit))
+crab_for_fit$coefficients
+crab_back_fit$coefficients
+crab_step_fit$coefficients
+# 3개 다 동일..
+
+# 예측력 평가
+summary(crab_for_fit)
+crab_for_pred <- predict(crab_for_fit, test_crab, type='response')
+table(crab_dat_rm$y) # 0(없음): 62, 1(있음): 110
+prop.table(table(crab_dat_rm$y)) # 0: 0.36 vs 1: 0.64  데이터비율을 고려하여 cutoff를 0.4
+cutoff_result <- ifelse(crab_for_pred > 0.4, 1, 0)
+prop.table(table(cutoff_result))
+pred_tab <- table(test_crab$y, cutoff_result)
+pred_tab
+# 정확도
+(pred_tab[1,1]+pred_tab[2,2])/sum(pred_tab) # 0.71
+# 민감도
+pred_tab[2,2]/sum(pred_tab[2,]) # 0.94
+# 특이도
+pred_tab[1,1]/sum(pred_tab[1,]) # 0.28
+
+# 패키지 써서 ROC 커브 그리기
+library(Epi)
+ROC(crab_for_pred, test_crab$y) # ??
+
+# 다시 cutoff 0.5로..
+cutoff_result <- ifelse(crab_for_pred > 0.5, 1, 0)
+pred_tab <- table(test_crab$y, cutoff_result)
+pred_tab
+# 정확도
+(pred_tab[1,1]+pred_tab[2,2])/sum(pred_tab) # 0.73
+# 민감도
+pred_tab[2,2]/sum(pred_tab[2,]) # 0.88
+# 특이도
+pred_tab[1,1]/sum(pred_tab[1,]) # 0.44
+
+ROC(form=y~.-satell, data=train_crab) #??
+ROC(crab_for_pred, test_crab$y) #??
+
+
+
+## Personal Loan
+rm(list=ls())
+loan_dat <- read.csv('Personal Loan.csv')
+# View(loan_dat)
+head(loan_dat)
+dim(loan_dat)
+str(loan_dat)
+summary(loan_dat) # 결측치 없음
+
+row.names(loan_dat) <- loan_dat$ID # ID를 raw name으로
+loan_dat <- loan_dat[,-1] # 원 ID 컬럼 제거
+# 너무 많아서 쪼개서 봄
+plot(loan_dat[,c(1:6,which(names(loan_dat)=='Personal.Loan'))])
+plot(loan_dat[,7:13])
+fact_names <- c('Family','Education','Personal.Loan','Securities.Account','CD.Account','Online','CreditCard')
+loan_dat[fact_names] <- lapply(loan_dat[fact_names], factor)
+plot(loan_dat$ZIP.Code)
+loan_dat$ZIP.Code[which.min(loan_dat$ZIP.Code)] # 잘못 입력된 값으로 보임. 제거
+loan_dat <- loan_dat[-which.min(loan_dat$ZIP.Code),]
+# Age와 Experience의 다중공선성은..? Age를 제거해야하나..?
+
+# 데이터 분할
+rand_idx <- sample(1:nrow(loan_dat), size=round(nrow(loan_dat)*0.7), replace=F)
+train_loan <- loan_dat[rand_idx,]
+test_loan <- loan_dat[-rand_idx,]
+
+# 변수 선택
+loan_null_fit <- glm(Personal.Loan~1, family=binomial, data=train_loan)
+loan_full_fit <- glm(Personal.Loan~., family=binomial, data=train_loan)
+# forward selection
+loan_for_fit <- step(loan_null_fit, direction='forward', scope=formula(loan_full_fit))
+# backward selection
+loan_back_fit <- step(loan_full_fit, direction='backward')
+# stepwise selection
+loan_step_fit <- step(loan_null_fit, direction='both', scope=formula(loan_full_fit))
+loan_for_fit$coefficients
+loan_back_fit$coefficients
+loan_step_fit$coefficients
+# 셋 모두 동일
+
+# 예측력 평가
+loan_for_pred <- predict(loan_for_fit, test_loan, type='response')
+prop.table(table(loan_dat$Personal.Loan)) # 9:1 정도.. cutoff는 0.9?
+cutoff_result <- ifelse(loan_for_pred > 0.5, 1, 0) # 그렇지만 항상 0.5정도가 제일 나은듯..--?
+pred_tab <- table(test_loan$Personal.Loan, cutoff_result)
+# 정확도
+(pred_tab[1,1] + pred_tab[2,2])/sum(pred_tab) # 0.96
+# 민감도
+pred_tab[2,2]/sum(pred_tab[2,]) # 0.68
+# 특이도
+pred_tab[1,1]/sum(pred_tab[1,]) # 0.99
+
+Epi::ROC(loan_for_pred, test_loan$Personal.Loan) # ??
+
+```

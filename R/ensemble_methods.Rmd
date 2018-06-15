@@ -1,0 +1,111 @@
+---
+title: "Ensemble methods - Bagging, Boosting, & Random Forest"
+output: html_notebook
+---
+
+``` {r bagging, boosting & random forest}
+rm(list=ls())
+library(caret)
+#### 모델 향상 ####
+cred_dat <- read.csv('credit.csv', header=TRUE)
+head(cred_dat) # View(cred_dat)
+
+rand_idx <- sample(1:nrow(cred_dat), size=round(nrow(cred_dat)*0.7), replace = F)
+train_cred <- cred_dat[rand_idx,]
+test_cred <- cred_dat[-rand_idx,]
+
+names(getModelInfo()) ##  caret패키지의 train이 지원하는 모델 패키지명들 보기..???
+
+#### C50 : 의사결정나무 한 개로 할 경우 예 ####
+library(C50)
+
+C50_fit <- C5.0(train_cred[,!names(train_cred) %in% 'default'],
+                train_cred$default)
+C50_pred <- predict(C50_fit, test_cred)
+table(test_cred$default, C50_pred)
+#     C50_pred
+#       no yes
+# no  190  21
+# yes  52  37
+# 73 개를 틀림..
+
+## 수업 x. C5.0으로 성능 개선 
+C50_fit2 <- train(default~., data=train_cred, method='C5.0',
+                  trControl=trainControl(method='repeatedcv',
+                                         number=5,
+                                         repeats=5))
+C50_pred2 <- predict(C50_fit2, test_cred)
+table(test_cred$default, C50_pred2) # 73개... 같네ㅋ
+# sensitivity(test_cred$default, C50_pred2) # caret이 지원하는 함수 
+# specificity(test_cred$default, C50_pred2) # caret이 지원하는 함수..
+# 위에 받은 코드 틀린 듯. predict 값 먼저 넣어야 하는 듯. yes,no순서도 바뀜
+
+test_cred_y <- relevel(test_cred$default, ref='yes') # Reorder Levels of Factor 'yes'를 첫번째로 두고. 그럼 나머지 순서는 무슨 기준으로?
+C50_pred2_reord <- relevel(C50_pred2, ref='yes')
+table(test_cred_y, C50_pred2_reord) 
+# 위처럼 순서를 맞춰야지 아래 sensitivity, specificity 함수가 올바로 사용됨
+# sensitivity(test_cred_y, C50_pred2_reord) 
+# specificity(test_cred_y, C50_pred2_reord)
+# 위에 받은 코드 틀린 듯
+sensitivity(C50_pred2_reord, test_cred_y) # 0.46
+specificity(C50_pred2_reord, test_cred_y) # 0.88
+
+
+
+#### Bagging ####
+# install.packages('ipred')
+library(ipred)
+
+bagging_fit <- ipred::bagging(default~., data=train_cred, nbagg=100)  # nbagg: 샘플링 몇 번 할지. 너무 크게 잡으면 컴 과부하 걸릴 수 있음
+# bagging 이 다른 패키지에도 있음.
+# 다른 패키지를 나중에 깔고 돌리면 그 패키지의 bagging 이 실행될 수 있음
+# ipred::bagging  - ipred 패키지의 bagging 이라고 명시
+bagging_fit$mtrees[[1]] # 100개 tree중 한 개만 보기
+# bagging_fit <- ipred::bagging(default~., data=train_cred, nbagg=100, coob=T)
+# bagging_fit$err  # coob=T하면 이게 나오는데 정확히 뭔지.. train데이터 예측했을 때 오분류율인가? 
+
+bagging_pred <- predict(bagging_fit, test_cred)
+table(test_cred$default, bagging_pred)
+# 67개 틀림... 약간 좋아짐. 더 큰 데이터 사용하고, nbagg 늘리면 더 좋아짐.??
+
+
+
+#### Boosting ####
+# install.packages('adabag')
+library(adabag) # 범주형 종속변수에만 사용 가능
+# install.packages('gbm') # 종속변수가 연속형일 때
+
+boosting_fit <- adabag::boosting(default~., data=train_cred, mfinal=10, 
+         control=rpart.control(maxdepth=5))  # mfinal: 각각의 모델을 몇개 만들건지. 컴퓨터 사양에 따라 되면 더 늘려도.
+                               # maxdepth: 최대 나무 깊이. boosting은 작은 나무 여러개(bagging은 큰 나무 여러개)
+
+boosting_fit$weights # 각 나무의 가중치. 첫번째가 제일 큰 값이므로 첫번째 나무가 가장 좋은 것을 알 수 있음
+boosting_fit$importance # 변수별 중요도. 값이 클수록. 나무들의 위쪽에 있는 변수들을 살펴본 결과??
+
+boosting_pred <- predict(boosting_fit, test_cred)
+boosting_pred # table도 나오고 error율도 나옴
+boosting_pred$confusion  # 위에서 다 나오는 것 중에 이것만 보려면. 성능이 더 안좋아짐..
+boosting_pred$class
+
+
+#### random forest ####
+# install.packages('randomForest')
+library(randomForest) # 몹시 복잡하기 때문에 실행은 느릴 것
+randomforest_fit <- randomForest(default~., data=train_cred,
+                                 ntree=500, importance=T) # ntree: 숲 안에 나무를 몇 개 만들지
+names(randomforest_fit) # 안에 뭐있는지 보기
+randomforest_fit$call # 내가 쓴 함수
+randomforest_fit$predicted # 'train 데이터에 대한' 예측값. overfitting 일 것..
+randomforest_fit$importance # 중요도. MeanDecreaseAccuracy: 정확도 줄이는데 중요한 정도? MeanDecreaseGini: 지니계수 줄이는데 중요한 정도?
+
+varImpPlot(randomforest_fit) # plot으로 보기
+# 어느 변수가 중요한지만 알려줌. '중요하다' 뿐
+# 의사결정나무 한 개는 각 변수가 좋은 or 나쁜 방향으로 중요한지, 어느 값일 때 어느 쪽으로 가는지 등등을 알려주지만 얘는 알 수 없음
+
+randomforest_pred <- predict(randomforest_fit, test_cred)
+table(test_cred$default, randomforest_pred) # 오분류율: 65  좀 좋아짐..
+
+# C5.0 등을 써도 hyperparameter 조정을 잘하면 이 정도 성능 나옴
+# 매개변수 조율이 너무 힘들 때 이런걸 쓰면 되는데 대신 설명력은 포기해야.
+
+```
