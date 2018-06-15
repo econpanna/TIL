@@ -29,7 +29,7 @@
             <g class="axis"/>
         </svg>
         <script>
-            d3.csv('wordfreq1.csv', function (err, data) {
+            d3.csv('data/wordfreq1.csv', function (err, data) {
                 data.forEach(function (d) {
                     d.freq = +d.freq;
                 });
